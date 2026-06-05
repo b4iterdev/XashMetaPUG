@@ -402,6 +402,8 @@ void Plugin::UnpauseMatch()
 
 void Plugin::SwapTeams()
 {
+    this->restarting_ = true;
+    ServerCommand("swapteams\n");
     std::swap(terroristScore_, ctScore_);
     UpdateScoreboard();
     Broadcast("[XMP] Tracked team scores swapped. Players should switch sides now if automatic team switch is unavailable.\n");
