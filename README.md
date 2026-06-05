@@ -14,8 +14,9 @@ The implementation plan is tracked at:
 - Cvar registration.
 - Chat command parsing for `.` player commands and `!` admin commands.
 - Ready tracking.
+- Knife round before first LIVE with player-selected `.stay` / `.swap` side choice.
 - LO3 flow.
-- Basic match states: warmup, waiting ready, first half, halftime, second half, overtime, finished.
+- Basic match states: warmup, waiting ready, knife round, side selection, first half, halftime, second half, overtime, finished.
 - TeamScore-message based score tracking.
 - Basic admin list.
 - Basic pause/unpause and score commands.
@@ -64,6 +65,8 @@ linux addons/xashmetapug/dlls/xashmetapug_mm_arm64.so
 .notready
 .status
 .score
+.stay
+.swap
 .help
 ```
 
@@ -112,6 +115,7 @@ Paths containing `..`, spaces, quotes, semicolons, newlines, or paths outside th
 ## Known Limitations
 
 - Round-end detection is inferred from `TeamScore` messages because ReGameDLL hooks are intentionally not used.
+- Knife-round winner detection is also inferred from `TeamScore`; the plugin gates side choice before first LIVE, but it does not enforce weapon stripping without ReGameDLL/AMXX helpers.
 - Automatic side swapping is not yet guaranteed across Xash3D/CS builds; MVP swaps tracked scores and announces manual side switching.
 - `!pause` is a minimal timed pause helper using `pausable`; exact behavior must be validated on the target Xash3D server build.
 - Full damage stats are deferred because MatchBot's implementation depends on damage hooks unavailable in Metamod-only mode.
