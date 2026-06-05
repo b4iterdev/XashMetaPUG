@@ -194,10 +194,10 @@ void Plugin::RegisterCvars()
     RegisterCvar(cvars_.readyTime, "xmp_ready_time", "60");
     RegisterCvar(cvars_.matchRounds, "xmp_match_rounds", "30");
     RegisterCvar(cvars_.halfRounds, "xmp_half_rounds", "15");
-    RegisterCvar(cvars_.firstTo, "xmp_first_to", "0");
+    RegisterCvar(cvars_.firstTo, "xmp_first_to", "16");
     RegisterCvar(cvars_.overtimeEnabled, "xmp_overtime_enabled", "1");
     RegisterCvar(cvars_.overtimeRounds, "xmp_overtime_rounds", "6");
-    RegisterCvar(cvars_.overtimeFirstTo, "xmp_overtime_first_to", "0");
+    RegisterCvar(cvars_.overtimeFirstTo, "xmp_overtime_first_to", "4");
     RegisterCvar(cvars_.lo3Enabled, "xmp_lo3_enabled", "1");
     RegisterCvar(cvars_.pauseTime, "xmp_pause_time", "60");
     RegisterCvar(cvars_.votePercent, "xmp_vote_percent", "0.70");

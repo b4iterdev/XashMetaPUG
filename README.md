@@ -131,10 +131,10 @@ Paths containing `..`, spaces, quotes, semicolons, newlines, or paths outside th
 | `xmp_ready_time` | `60` | Seconds before auto-start when `xmp_ready_type=2`. |
 | `xmp_match_rounds` | `30` | Total rounds per match (used when `xmp_first_to=0`). |
 | `xmp_half_rounds` | `15` | Rounds that trigger halftime. |
-| `xmp_first_to` | `0` | If `>0`, match ends as soon as either team reaches this many wins. Set to `16` for CS:GO MR15. `0` disables (falls back to `xmp_match_rounds`). |
+| `xmp_first_to` | `16` | Match ends as soon as either team reaches this many wins (CS:GO MR15). Set to `0` to disable and fall back to `xmp_match_rounds`. |
 | `xmp_overtime_enabled` | `1` | Allow overtime when 2nd half ends tied. |
 | `xmp_overtime_rounds` | `6` | Max rounds per overtime period (used when `xmp_overtime_first_to=0`). |
-| `xmp_overtime_first_to` | `0` | If `>0`, overtime ends as soon as either team reaches this many wins. Set to `4` for CS:GO MR3 OT. `0` disables. |
+| `xmp_overtime_first_to` | `4` | Overtime ends as soon as either team reaches this many wins (CS:GO MR3 OT). Set to `0` to disable and fall back to `xmp_overtime_rounds`. |
 | `xmp_lo3_enabled` | `1` | Run the live-on-three restart sequence. |
 | `xmp_pause_time` | `60` | Seconds the match stays paused after `!pause`. |
 | `xmp_vote_percent` | `0.70` | Reserved for future vote system. |
