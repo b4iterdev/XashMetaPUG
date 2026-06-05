@@ -118,6 +118,15 @@ bool Plugin::OnClientCommand(edict_t *entity)
         return true;
     }
 
+    if (IsKnifeRoundBlockBuy(state_)) {
+        if (strcasecmp(cmd, "buy") == 0 || strcasecmp(cmd, "buyequip") == 0 ||
+            strcasecmp(cmd, "rebuy") == 0 || strcasecmp(cmd, "cl_autobuy") == 0 ||
+            strcasecmp(cmd, "cl_setautobuy") == 0 || strcasecmp(cmd, "cl_rebuy") == 0) {
+            Say(entity, "[XMP] Buying is disabled during the knife round.\n");
+            return true;
+        }
+    }
+
     if (strcasecmp(cmd, "say") == 0 || strcasecmp(cmd, "say_team") == 0) {
         const char *args = g_engfuncs.pfnCmd_Args();
         if (!args) {
@@ -265,6 +274,7 @@ void Plugin::ResetMatch(bool keepWarmup)
 {
     ClearTasks();
     ServerCommand("pausable 0\n");
+    RestoreKnifeRoundWeapons();
     for (auto &player : players_) {
         player.ready = false;
     }
@@ -400,8 +410,10 @@ void Plugin::StartKnifeRound()
     knifeWinner_ = Team::Unknown;
     restarting_ = true;
     SetState(MatchState::KnifeRound);
+    EnforceKnifeRoundWeapons();
     Broadcast("[XMP] Knife round starting. Winner chooses side with .stay or .swap.\n");
     ServerCommand("sv_restart 1\n");
+    Schedule("knife_strip", 0.5f, true, [this]() { StripKnifeRoundWeapons(); });
 }
 
 void Plugin::StartLO3(MatchState liveState)
@@ -434,6 +446,7 @@ void Plugin::FinishLO3()
     this->restarting_ = false;
     lastObservedTScore_ = terroristScore_;
     lastObservedCTScore_ = ctScore_;
+    RestoreKnifeRoundWeapons();
     SetState(pendingLiveState_);
     if (!ShouldPreservePlayerScores(pendingLiveState_)) {
         ServerCommand("sv_restart 3\n");
@@ -707,6 +720,80 @@ int Plugin::TeamNumber(Team team) const
     if (team == Team::CounterTerrorist) return 2;
     if (team == Team::Spectator) return 3;
     return 0;
+}
+
+bool Plugin::IsKnifeRoundState(MatchState state) const
+{
+    return state == MatchState::KnifeRound || state == MatchState::SideSelection;
+}
+
+bool Plugin::IsKnifeRoundBlockBuy(MatchState state) const
+{
+    return IsKnifeRoundState(state);
+}
+
+void Plugin::EnforceKnifeRoundWeapons()
+{
+    knifeRoundWeaponsEnforced_ = true;
+    ServerCommand("mp_buytime 0\n");
+    ServerCommand("sv_buy_status_override 3\n");
+    ServerCommand("mp_startmoney 0\n");
+    ServerCommand("mp_maxmoney 0\n");
+    for (int i = 1; i <= kMaxClients; ++i) {
+        if (!players_[i].connected || FNullEnt(INDEXENT(i))) continue;
+        edict_t *entity = INDEXENT(i);
+        char clearAutoBuy[] = "cl_autobuy \"\"\n";
+        g_engfuncs.pfnClientCommand(entity, clearAutoBuy);
+        char clearSetAutoBuy[] = "cl_setautobuy \"\"\n";
+        g_engfuncs.pfnClientCommand(entity, clearSetAutoBuy);
+        char clearRebuy[] = "cl_rebuy \"\"\n";
+        g_engfuncs.pfnClientCommand(entity, clearRebuy);
+    }
+    Broadcast("[XMP] Knife-only mode: money locked, buy disabled, pistols stripped.\n");
+    Log("EnforceKnifeRoundWeapons: buy/money stripped, cl_autobuy/cl_setautobuy/cl_rebuy cleared for all players");
+}
+
+void Plugin::StripKnifeRoundWeapons()
+{
+    if (!knifeRoundWeaponsEnforced_ || !IsKnifeRoundState(state_)) {
+        CancelTask("knife_strip");
+        return;
+    }
+    for (int i = 1; i <= kMaxClients; ++i) {
+        if (!players_[i].connected || FNullEnt(INDEXENT(i))) continue;
+        if (players_[i].team != Team::Terrorist && players_[i].team != Team::CounterTerrorist) {
+            continue;
+        }
+        edict_t *entity = INDEXENT(i);
+        char dropCmd[] = "drop\n";
+        g_engfuncs.pfnClientCommand(entity, dropCmd);
+        char giveKnife[] = "give weapon_knife\n";
+        g_engfuncs.pfnClientCommand(entity, giveKnife);
+    }
+}
+
+void Plugin::RestoreKnifeRoundWeapons()
+{
+    if (!knifeRoundWeaponsEnforced_) {
+        return;
+    }
+    knifeRoundWeaponsEnforced_ = false;
+    CancelTask("knife_strip");
+    ServerCommand("sv_buy_status_override -1\n");
+    ServerCommand("mp_buytime 0.25\n");
+    ServerCommand("mp_startmoney 800\n");
+    ServerCommand("mp_maxmoney 16000\n");
+    for (int i = 1; i <= kMaxClients; ++i) {
+        if (!players_[i].connected || FNullEnt(INDEXENT(i))) continue;
+        edict_t *entity = INDEXENT(i);
+        char clearAutoBuy[] = "cl_autobuy \"\"\n";
+        g_engfuncs.pfnClientCommand(entity, clearAutoBuy);
+        char clearSetAutoBuy[] = "cl_setautobuy \"\"\n";
+        g_engfuncs.pfnClientCommand(entity, clearSetAutoBuy);
+        char clearRebuy[] = "cl_rebuy \"\"\n";
+        g_engfuncs.pfnClientCommand(entity, clearRebuy);
+    }
+    Log("RestoreKnifeRoundWeapons: buy/money restored to defaults, knife_strip task cancelled");
 }
 
 void Plugin::EvaluateMatchProgress()

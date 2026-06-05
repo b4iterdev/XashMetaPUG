@@ -157,6 +157,11 @@ private:
     int ScoreInfoMessageId();
     const char *EngineTeamScoreName(Team team) const;
     int TeamNumber(Team team) const;
+    void EnforceKnifeRoundWeapons();
+    void StripKnifeRoundWeapons();
+    void RestoreKnifeRoundWeapons();
+    bool IsKnifeRoundState(MatchState state) const;
+    bool IsKnifeRoundBlockBuy(MatchState state) const;
 
     bool DispatchCommand(edict_t *entity, const std::string &raw);
     bool DispatchPlayerCommand(edict_t *entity, const std::string &command);
@@ -210,6 +215,7 @@ private:
     bool sideSelectionPending_ = false;
     bool suppressCurrentMessage_ = false;
     bool replayingScoreMessages_ = false;
+    bool knifeRoundWeaponsEnforced_ = false;
     Team knifeWinner_ = Team::Unknown;
     int teamScoreMessageId_ = 0;
     int scoreInfoMessageId_ = 0;

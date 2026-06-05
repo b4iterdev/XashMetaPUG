@@ -76,6 +76,49 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("liveState == MatchState::SecondHalf", PLUGIN_CPP)
         self.assertIn("if (!preservePlayerScores)", PLUGIN_CPP)
 
+    def test_knife_round_disables_buy_money_and_strips_pistol(self):
+        self.assertIn("EnforceKnifeRoundWeapons()", PLUGIN_CPP)
+        self.assertIn("RestoreKnifeRoundWeapons()", PLUGIN_CPP)
+        self.assertIn('"mp_buytime 0\\n"', PLUGIN_CPP)
+        self.assertIn('"sv_buy_status_override 3\\n"', PLUGIN_CPP)
+        self.assertIn('"mp_startmoney 0\\n"', PLUGIN_CPP)
+        self.assertIn('"mp_maxmoney 0\\n"', PLUGIN_CPP)
+        self.assertIn('"cl_autobuy \\\"\\\"\\n"', PLUGIN_CPP)
+        self.assertIn('"cl_setautobuy \\\"\\\"\\n"', PLUGIN_CPP)
+        self.assertIn('"cl_rebuy \\\"\\\"\\n"', PLUGIN_CPP)
+
+    def test_buy_buyequip_rebuy_commands_are_blocked_during_knife_round(self):
+        self.assertIn('"buy"', PLUGIN_CPP)
+        self.assertIn('"buyequip"', PLUGIN_CPP)
+        self.assertIn('"rebuy"', PLUGIN_CPP)
+        self.assertIn('"cl_autobuy"', PLUGIN_CPP)
+        self.assertIn('"cl_setautobuy"', PLUGIN_CPP)
+        self.assertIn('"cl_rebuy"', PLUGIN_CPP)
+        self.assertIn("IsKnifeRoundBlockBuy(state_)", PLUGIN_CPP)
+        self.assertIn("bool IsKnifeRoundState(MatchState state) const", PLUGIN_H)
+        self.assertIn("IsKnifeRoundState(state)", PLUGIN_CPP)
+
+    def test_knife_round_strips_pistol_and_re_arms_knife_via_drop_loop(self):
+        self.assertIn("StripKnifeRoundWeapons()", PLUGIN_CPP)
+        self.assertIn("\"drop\\n\"", PLUGIN_CPP)
+        self.assertIn("\"give weapon_knife\\n\"", PLUGIN_CPP)
+        self.assertIn("StripKnifeRoundWeapons", PLUGIN_CPP)
+        self.assertIn("Schedule(\"knife_strip\"", PLUGIN_CPP)
+        self.assertLess(
+            PLUGIN_CPP.index("EnforceKnifeRoundWeapons()"),
+            PLUGIN_CPP.index("StripKnifeRoundWeapons()"),
+        )
+
+    def test_knife_round_weapon_state_is_restored_when_match_resets(self):
+        self.assertIn("RestoreKnifeRoundWeapons()", PLUGIN_CPP)
+        self.assertIn("ResetMatch(true)", PLUGIN_CPP)
+        self.assertIn("ResetMatch(false)", PLUGIN_CPP)
+        self.assertIn("OnServerDeactivate", PLUGIN_CPP)
+        self.assertLess(
+            PLUGIN_CPP.index("ResetMatch(false)"),
+            PLUGIN_CPP.index("RestoreKnifeRoundWeapons()"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
