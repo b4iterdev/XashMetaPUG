@@ -51,6 +51,31 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("terroristScore_ - overtimeTerroristStartScore_", PLUGIN_CPP)
         self.assertIn("ctScore_ - overtimeCTStartScore_", PLUGIN_CPP)
 
+    def test_halftime_swaps_scores_when_sides_swap(self):
+        self.assertIn("SwapSideScores()", PLUGIN_CPP)
+        self.assertIn("std::swap(terroristScore_, ctScore_)", PLUGIN_CPP)
+        self.assertIn("std::swap(lastObservedTScore_, lastObservedCTScore_)", PLUGIN_CPP)
+        self.assertLess(PLUGIN_CPP.index("SwapSideScores()"), PLUGIN_CPP.index("SwapTeams();\n    StartReady();"))
+
+    def test_team_score_messages_are_rewritten_and_resent(self):
+        self.assertIn("ShouldRewriteTeamScoreMessage()", PLUGIN_CPP)
+        self.assertIn("SendTeamScore(team)", PLUGIN_CPP)
+        self.assertIn("TeamScoreMessageId()", PLUGIN_CPP)
+        self.assertIn("MRES_SUPERCEDE", (ROOT / "src" / "metamod_api.cpp").read_text())
+        self.assertIn("RETURN_META(xmp::GetPlugin().OnMessageEnd() ? MRES_SUPERCEDE : MRES_IGNORED)", (ROOT / "src" / "metamod_api.cpp").read_text())
+
+    def test_score_info_is_cached_and_replayed_after_second_half_swap(self):
+        self.assertIn("scoreInfoValues", PLUGIN_H)
+        self.assertIn("CacheScoreInfo()", PLUGIN_CPP)
+        self.assertIn("ReplayAllScoreInfo()", PLUGIN_CPP)
+        self.assertIn("ScoreInfoMessageId()", PLUGIN_CPP)
+
+    def test_second_half_lo3_does_not_sv_restart(self):
+        self.assertIn("ShouldPreservePlayerScores(liveState)", PLUGIN_CPP)
+        self.assertIn("ShouldPreservePlayerScores(pendingLiveState_)", PLUGIN_CPP)
+        self.assertIn("liveState == MatchState::SecondHalf", PLUGIN_CPP)
+        self.assertIn("if (!preservePlayerScores)", PLUGIN_CPP)
+
 
 if __name__ == "__main__":
     unittest.main()
