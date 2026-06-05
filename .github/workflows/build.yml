@@ -27,7 +27,7 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends g++ make git tar gzip
 
       - name: Fetch SDK headers
-        run: git clone --depth 1 https://github.com/SmileYzn/MatchBot.git "$RUNNER_TEMP/MatchBot"
+        run: git clone --depth 1 https://github.com/b4iterdev/MatchBot.git "$RUNNER_TEMP/MatchBot"
 
       - name: Build plugin
         run: make clean && make SDK_ROOT="$RUNNER_TEMP/MatchBot/MatchBot/include"
