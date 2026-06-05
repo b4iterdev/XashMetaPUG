@@ -347,8 +347,11 @@ void Plugin::StartLO3(MatchState liveState)
 
 void Plugin::FinishLO3()
 {
+    lastObservedTScore_ = 0;
+    lastObservedCTScore_ = 0;
     SetState(pendingLiveState_);
-    Broadcast("[XMP] LIVE LIVE LIVE!\n");
+    ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
+    Log("[XMP] LIVE LIVE LIVE!");
 }
 
 void Plugin::StopMatch()
@@ -452,6 +455,8 @@ void Plugin::EnterHalftime()
 {
     halfRoundCount_ = 0;
     pendingLiveState_ = MatchState::SecondHalf;
+    lastObservedTScore_ = 0;
+    lastObservedCTScore_ = 0;
     SetState(MatchState::HalfTime);
     Broadcast("[XMP] Halftime. Score T %d - CT %d. Swap sides and type .ready.\n", terroristScore_, ctScore_);
     SwapTeams();
