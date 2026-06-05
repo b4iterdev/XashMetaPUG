@@ -404,14 +404,24 @@ void Plugin::UnpauseMatch()
     Broadcast("[XMP] Match unpaused.\n");
 }
 
-void Plugin::SwapTeams()
+void xmp::Plugin::SwapTeams()
 {
     this->restarting_ = true;
-    ServerCommand("swapteams\n");
+    for (int i = 1; i <= kMaxClients; ++i) {
+        if (!players_[i].connected || !IsConnectedPlayerIndex(i)) continue;
+
+        edict_t *entity = INDEXENT(i);
+        if (FNullEnt(entity)) continue;
+
+        const int targetTeam = (players_[i].team == Team::Terrorist) ? 2 : 1;
+        g_engfuncs.pfnClientCommand(entity, "jointeam %d\n", targetTeam);
+    }
+
     std::swap(terroristScore_, ctScore_);
     Schedule("update_scoreboard", 0.1f, false, [this]() { UpdateScoreboard(); });
-    Broadcast("[XMP] Tracked team scores swapped. Players should switch sides now if automatic team switch is unavailable.\n");
+    Broadcast("[XMP] Tracked team scores swapped. Players should switch sides now.\n");
 }
+
 
 void Plugin::UpdateScoreboard()
 {
