@@ -71,7 +71,9 @@ void Plugin::OnStartFrame()
 bool Plugin::OnClientConnect(edict_t *entity, const char *name)
 {
     const int index = PlayerIndex(entity);
+    Log("OnClientConnect: entity=%p, name=%s, index=%d", entity, name ? name : "null", index);
     if (index <= 0 || index > kMaxClients) {
+        Log("OnClientConnect: invalid index %d", index);
         return true;
     }
 
@@ -81,11 +83,13 @@ bool Plugin::OnClientConnect(edict_t *entity, const char *name)
     player.name = (name && name[0] != '\0') ? name : Format("player%d", index);
     player.authId.clear();
     player.admin = false;
+    Log("OnClientConnect: player %d (%s) connected", index, player.name.c_str());
     return true;
 }
 
 void Plugin::OnClientPutInServer(edict_t *entity)
 {
+    Log("OnClientPutInServer: entity=%p, index=%d", entity, PlayerIndex(entity));
     UpdatePlayer(entity);
     if (state_ == MatchState::WaitingReady || state_ == MatchState::HalfTime) {
         Say(entity, "[XMP] Type .ready when ready.\n");
