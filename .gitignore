@@ -1,0 +1,8 @@
+build/
+*.o
+*.so
+*.dylib
+*.dll
+*.dSYM/
+.DS_Store
+.sisyphus/run-continuation/
