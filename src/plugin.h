@@ -144,7 +144,7 @@ private:
     int ConnectedPlayers() const;
     int ReadyPlayers() const;
     void SetReady(edict_t *entity, bool ready);
-    void UpdatePlayer(edict_t *entity);
+    void UpdatePlayer(edict_t *entity, bool resolveIdentity);
     void Schedule(const std::string &name, float delay, bool repeat, std::function<void()> callback);
     void CancelTask(const std::string &name);
     void ClearTasks();
