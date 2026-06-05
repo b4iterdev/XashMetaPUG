@@ -110,6 +110,7 @@ public:
     void OnWriteLong(int value);
     void OnWriteString(const char *value);
     void OnMessageEnd();
+    void ForceStartFromServer();
 
 private:
     void RegisterCvars();

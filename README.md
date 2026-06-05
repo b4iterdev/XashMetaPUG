@@ -80,6 +80,14 @@ linux addons/xashmetapug/dlls/xashmetapug_mm_arm64.so
 !reload
 ```
 
+## Server Console Commands
+
+```txt
+xmp_forcestart
+```
+
+`xmp_forcestart` is registered as a server command through Metamod/HLSDK and is intended for server console/RCON usage. It is not a client chat command.
+
 Admins are loaded from:
 
 ```txt

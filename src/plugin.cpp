@@ -12,7 +12,21 @@ void Plugin::OnMetaAttach()
 {
     RegisterCvars();
     LoadAdmins();
+    g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_forcestart"), []() {
+        GetPlugin().ForceStartFromServer();
+    });
     Log("XashMetaPUG attached");
+}
+
+void Plugin::ForceStartFromServer()
+{
+    if (CvarInt(cvars_.enabled) <= 0) {
+        Log("xmp_forcestart ignored because xmp_enabled is 0");
+        return;
+    }
+
+    Log("xmp_forcestart executed from server console");
+    StartMatch(true);
 }
 
 void Plugin::OnServerActivate()
