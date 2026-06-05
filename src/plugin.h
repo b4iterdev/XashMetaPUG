@@ -178,6 +178,7 @@ private:
     int lastObservedTScore_ = 0;
     int lastObservedCTScore_ = 0;
     bool paused_ = false;
+    bool restarting_ = false;
 
     struct MessageCapture {
         int type = 0;
