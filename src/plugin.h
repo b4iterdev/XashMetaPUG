@@ -180,6 +180,7 @@ private:
     int lastObservedCTScore_ = 0;
     bool paused_ = false;
     bool restarting_ = false;
+    bool syncingScoreboard_ = false;
 
     struct MessageCapture {
         int type = 0;

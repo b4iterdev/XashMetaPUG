@@ -415,6 +415,7 @@ void Plugin::SwapTeams()
 
 void Plugin::UpdateScoreboard()
 {
+    this->syncingScoreboard_ = true;
     int msgTeamScore = gpMetaUtilFuncs ? GET_USER_MSG_ID(PLID, "TeamScore", nullptr) : -1;
     if (msgTeamScore == -1) {
         msgTeamScore = g_engfuncs.pfnRegUserMsg("TeamScore", -1);
@@ -429,11 +430,12 @@ void Plugin::UpdateScoreboard()
 
     SendScore("TERRORIST", terroristScore_);
     SendScore("CT", ctScore_);
+    this->syncingScoreboard_ = false;
 }
 
 void Plugin::HandleRoundScore(Team team, int score)
 {
-    if (this->restarting_) {
+    if (this->syncingScoreboard_ || this->restarting_) {
         lastObservedTScore_ = score;
         lastObservedCTScore_ = score;
         return;
