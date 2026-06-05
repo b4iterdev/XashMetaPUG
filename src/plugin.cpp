@@ -414,20 +414,65 @@ void Plugin::SwapTeams()
         edict_t *entity = INDEXENT(i);
         if (FNullEnt(entity)) continue;
 
-        Log("SwapTeams: Player %d (%s) current team: %d", i, players_[i].name.c_str(), (int)players_[i].team);
-
         const int targetTeam = (players_[i].team == Team::Terrorist) ? 2 : 1;
         g_engfuncs.pfnClientCommand(entity, "chooseteam\n");
         g_engfuncs.pfnClientCommand(entity, "jointeam %d\n", targetTeam);
-
-        int msgTeamInfo = gpMetaUtilFuncs ? GET_USER_MSG_ID(PLID, "TeamInfo", nullptr) : g_engfuncs.pfnRegUserMsg("TeamInfo", -1);
-        g_engfuncs.pfnMessageBegin(MSG_ALL, msgTeamInfo, nullptr, nullptr);
-        g_engfuncs.pfnWriteByte(i);
-        g_engfuncs.pfnWriteString((targetTeam == 2) ? "TERRORIST" : "CT");
-        g_engfuncs.pfnMessageEnd();
-
-        Log("SwapTeams: Player %d forced jointeam %d", i, targetTeam);
     }
+
+    std::swap(terroristScore_, ctScore_);
+    Schedule("update_scoreboard", 0.1f, false, [this]() { UpdateScoreboard(); });
+    Broadcast("[XMP] Tracked team scores swapped. Players should switch sides now.\n");
+}
+
+void Plugin::UpdateScoreboard()
+{
+    this->syncingScoreboard_ = true;
+    int msgTeamScore = gpMetaUtilFuncs ? GET_USER_MSG_ID(PLID, "TeamScore", nullptr) : -1;
+    if (msgTeamScore == -1) {
+        msgTeamScore = g_engfuncs.pfnRegUserMsg("TeamScore", -1);
+    }
+
+    auto SendScore = [&](const char *teamName, int score) {
+        g_engfuncs.pfnMessageBegin(MSG_ALL, msgTeamScore, nullptr, nullptr);
+        g_engfuncs.pfnWriteString(teamName);
+        g_engfuncs.pfnWriteShort(score);
+        g_engfuncs.pfnMessageEnd();
+    };
+
+    SendScore("TERRORIST", terroristScore_);
+    SendScore("CT", ctScore_);
+    this->syncingScoreboard_ = false;
+}
+
+void Plugin::UpdateScoreboard()
+{
+    this->syncingScoreboard_ = true;
+    int msgTeamScore = gpMetaUtilFuncs ? GET_USER_MSG_ID(PLID, "TeamScore", nullptr) : -1;
+    if (msgTeamScore == -1) {
+        msgTeamScore = g_engfuncs.pfnRegUserMsg("TeamScore", -1);
+    }
+
+    auto SendScore = [&](const char *teamName, int score) {
+        g_engfuncs.pfnMessageBegin(MSG_ALL, msgTeamScore, nullptr, nullptr);
+        g_engfuncs.pfnWriteString(teamName);
+        g_engfuncs.pfnWriteShort(score);
+        g_engfuncs.pfnMessageEnd();
+    };
+
+    SendScore("TERRORIST", terroristScore_);
+    SendScore("CT", ctScore_);
+    this->syncingScoreboard_ = false;
+}
+
+void Plugin::UpdateScoreboard()
+{
+}
+
+void Plugin::UpdateScoreboard()
+{
+    // NO-OP: Forcing TeamScore messages causes pfnMessageBegin crashes.
+    // Rely on engine to sync scoreboard naturally.
+}
 
     std::swap(terroristScore_, ctScore_);
     Schedule("update_scoreboard", 0.1f, false, [this]() { UpdateScoreboard(); });
