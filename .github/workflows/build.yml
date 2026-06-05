@@ -1,0 +1,57 @@
+name: Build XashMetaPUG
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+jobs:
+  linux-arm64:
+    name: Linux ARM64 package
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends g++ make git tar gzip
+
+      - name: Fetch SDK headers
+        run: git clone --depth 1 https://github.com/SmileYzn/MatchBot.git "$RUNNER_TEMP/MatchBot"
+
+      - name: Build plugin
+        run: make clean && make SDK_ROOT="$RUNNER_TEMP/MatchBot/MatchBot/include"
+
+      - name: Stage package
+        run: |
+          set -euo pipefail
+          PACKAGE_ROOT="$RUNNER_TEMP/xashmetapug-package"
+          rm -rf "$PACKAGE_ROOT"
+          mkdir -p "$PACKAGE_ROOT"
+          cp -R cstrike "$PACKAGE_ROOT/"
+          test -f "$PACKAGE_ROOT/cstrike/addons/xashmetapug/dlls/xashmetapug_mm_arm64.so"
+          tar -C "$PACKAGE_ROOT" -czf xashmetapug-linux-arm64.tar.gz cstrike
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xashmetapug-linux-arm64
+          path: xashmetapug-linux-arm64.tar.gz
+          if-no-files-found: error
+
+      - name: Upload release asset
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v'))
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || github.ref_name }}
+          files: xashmetapug-linux-arm64.tar.gz
