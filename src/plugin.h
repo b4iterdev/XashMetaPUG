@@ -155,11 +155,17 @@ private:
     void ReplayAllScoreInfo();
     int TeamScoreMessageId();
     int ScoreInfoMessageId();
+    int MoneyMessageId();
     const char *EngineTeamScoreName(Team team) const;
     int TeamNumber(Team team) const;
     void EnforceKnifeRoundWeapons();
     void StripKnifeRoundWeapons();
     void RestoreKnifeRoundWeapons();
+    edict_t *CreateNamedEntity(const char *classname) const;
+    bool StripPlayerWeaponsNative(edict_t *entity) const;
+    bool GiveItemNative(edict_t *entity, const char *classname) const;
+    bool SetPlayerMoneyNative(edict_t *entity, int money, bool flash);
+    void EnforceKnifeRoundPlayerNative(edict_t *entity);
     bool IsKnifeRoundState(MatchState state) const;
     bool IsKnifeRoundBlockBuy(MatchState state) const;
 
@@ -219,6 +225,7 @@ private:
     Team knifeWinner_ = Team::Unknown;
     int teamScoreMessageId_ = 0;
     int scoreInfoMessageId_ = 0;
+    int moneyMessageId_ = 0;
 
     struct MessageCapture {
         int destination = 0;

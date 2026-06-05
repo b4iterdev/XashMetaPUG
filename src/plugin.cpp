@@ -1,5 +1,16 @@
 #include "plugin.h"
 
+#ifndef __linux__
+#define __linux__
+#endif
+#ifndef _vsnprintf
+#define _vsnprintf vsnprintf
+#endif
+
+#include <cbase.h>
+#include <player.h>
+#include <regamedll_const.h>
+
 
 
 namespace xmp {
@@ -709,6 +720,14 @@ int Plugin::ScoreInfoMessageId()
     return scoreInfoMessageId_;
 }
 
+int Plugin::MoneyMessageId()
+{
+    if (moneyMessageId_ <= 0 && gpMetaUtilFuncs) {
+        moneyMessageId_ = GET_USER_MSG_ID(PLID, "Money", nullptr);
+    }
+    return moneyMessageId_;
+}
+
 const char *Plugin::EngineTeamScoreName(Team team) const
 {
     return team == Team::CounterTerrorist ? "CT" : "TERRORIST";
@@ -741,16 +760,101 @@ void Plugin::EnforceKnifeRoundWeapons()
     ServerCommand("mp_maxmoney 0\n");
     for (int i = 1; i <= kMaxClients; ++i) {
         if (!players_[i].connected || FNullEnt(INDEXENT(i))) continue;
-        edict_t *entity = INDEXENT(i);
-        char clearAutoBuy[] = "cl_autobuy \"\"\n";
-        g_engfuncs.pfnClientCommand(entity, clearAutoBuy);
-        char clearSetAutoBuy[] = "cl_setautobuy \"\"\n";
-        g_engfuncs.pfnClientCommand(entity, clearSetAutoBuy);
-        char clearRebuy[] = "cl_rebuy \"\"\n";
-        g_engfuncs.pfnClientCommand(entity, clearRebuy);
+        EnforceKnifeRoundPlayerNative(INDEXENT(i));
     }
     Broadcast("[XMP] Knife-only mode: money locked, buy disabled, pistols stripped.\n");
     Log("EnforceKnifeRoundWeapons: buy/money stripped, cl_autobuy/cl_setautobuy/cl_rebuy cleared for all players");
+}
+
+edict_t *Plugin::CreateNamedEntity(const char *classname) const
+{
+    if (!classname || !*classname) {
+        return nullptr;
+    }
+    const string_t className = g_engfuncs.pfnAllocString(classname);
+    return g_engfuncs.pfnCreateNamedEntity(className);
+}
+
+bool Plugin::StripPlayerWeaponsNative(edict_t *entity) const
+{
+    if (!entity || FNullEnt(entity) || !gpGamedllFuncs || !gpGamedllFuncs->dllapi_table) {
+        return false;
+    }
+
+    edict_t *stripper = CreateNamedEntity("player_weaponstrip");
+    if (!stripper || FNullEnt(stripper)) {
+        return false;
+    }
+
+    MDLL_Spawn(stripper);
+    MDLL_Use(stripper, entity);
+    g_engfuncs.pfnRemoveEntity(stripper);
+    return true;
+}
+
+bool Plugin::GiveItemNative(edict_t *entity, const char *classname) const
+{
+    if (!entity || FNullEnt(entity) || !classname || !*classname || !gpGamedllFuncs || !gpGamedllFuncs->dllapi_table) {
+        return false;
+    }
+    if (std::strncmp(classname, "weapon_", 7) != 0 && std::strncmp(classname, "ammo_", 5) != 0 && std::strncmp(classname, "item_", 5) != 0) {
+        return false;
+    }
+
+    edict_t *item = CreateNamedEntity(classname);
+    if (!item || FNullEnt(item)) {
+        return false;
+    }
+
+    item->v.origin = entity->v.origin;
+    item->v.spawnflags |= SF_NORESPAWN;
+    MDLL_Spawn(item);
+    MDLL_Touch(item, entity);
+
+    if (!FNullEnt(item) && item->v.owner != entity && item->v.solid != SOLID_NOT) {
+        g_engfuncs.pfnRemoveEntity(item);
+        return false;
+    }
+    return true;
+}
+
+bool Plugin::SetPlayerMoneyNative(edict_t *entity, int money, bool flash)
+{
+    if (!entity || FNullEnt(entity)) {
+        return false;
+    }
+
+    CBasePlayer *player = CBasePlayer::Instance(entity);
+    if (!player) {
+        return false;
+    }
+
+    player->m_iAccount = money;
+    const int messageId = MoneyMessageId();
+    if (messageId > 0) {
+        g_engfuncs.pfnMessageBegin(MSG_ONE, messageId, nullptr, entity);
+        g_engfuncs.pfnWriteLong(money);
+        g_engfuncs.pfnWriteByte(flash ? 1 : 0);
+        g_engfuncs.pfnMessageEnd();
+    }
+    return true;
+}
+
+void Plugin::EnforceKnifeRoundPlayerNative(edict_t *entity)
+{
+    if (!entity || FNullEnt(entity)) {
+        return;
+    }
+    SetPlayerMoneyNative(entity, 0, false);
+    StripPlayerWeaponsNative(entity);
+    GiveItemNative(entity, "weapon_knife");
+
+    char clearAutoBuy[] = "cl_autobuy \"\"\n";
+    g_engfuncs.pfnClientCommand(entity, clearAutoBuy);
+    char clearSetAutoBuy[] = "cl_setautobuy \"\"\n";
+    g_engfuncs.pfnClientCommand(entity, clearSetAutoBuy);
+    char clearRebuy[] = "cl_rebuy \"\"\n";
+    g_engfuncs.pfnClientCommand(entity, clearRebuy);
 }
 
 void Plugin::StripKnifeRoundWeapons()
@@ -765,10 +869,7 @@ void Plugin::StripKnifeRoundWeapons()
             continue;
         }
         edict_t *entity = INDEXENT(i);
-        char dropCmd[] = "drop\n";
-        g_engfuncs.pfnClientCommand(entity, dropCmd);
-        char giveKnife[] = "give weapon_knife\n";
-        g_engfuncs.pfnClientCommand(entity, giveKnife);
+        EnforceKnifeRoundPlayerNative(entity);
     }
 }
 

@@ -100,8 +100,13 @@ class KnifeRoundStaticTests(unittest.TestCase):
 
     def test_knife_round_strips_pistol_and_re_arms_knife_via_drop_loop(self):
         self.assertIn("StripKnifeRoundWeapons()", PLUGIN_CPP)
-        self.assertIn("\"drop\\n\"", PLUGIN_CPP)
-        self.assertIn("\"give weapon_knife\\n\"", PLUGIN_CPP)
+        self.assertIn("StripPlayerWeaponsNative(entity)", PLUGIN_CPP)
+        self.assertIn('GiveItemNative(entity, "weapon_knife")', PLUGIN_CPP)
+        self.assertIn('CreateNamedEntity("player_weaponstrip")', PLUGIN_CPP)
+        self.assertIn('GiveItemNative(entity, "weapon_knife")', PLUGIN_CPP)
+        self.assertIn("MDLL_Spawn", PLUGIN_CPP)
+        self.assertIn("MDLL_Touch", PLUGIN_CPP)
+        self.assertIn("MDLL_Use", PLUGIN_CPP)
         self.assertIn("StripKnifeRoundWeapons", PLUGIN_CPP)
         self.assertIn("Schedule(\"knife_strip\"", PLUGIN_CPP)
         self.assertLess(
@@ -118,6 +123,15 @@ class KnifeRoundStaticTests(unittest.TestCase):
             PLUGIN_CPP.index("ResetMatch(false)"),
             PLUGIN_CPP.index("RestoreKnifeRoundWeapons()"),
         )
+
+    def test_knife_round_money_is_zeroed_with_native_pdata_and_money_message(self):
+        self.assertIn("SetPlayerMoneyNative(entity, 0, false)", PLUGIN_CPP)
+        self.assertIn("CBasePlayer::Instance(entity)", PLUGIN_CPP)
+        self.assertIn("player->m_iAccount = money", PLUGIN_CPP)
+        self.assertIn('GET_USER_MSG_ID(PLID, "Money", nullptr)', PLUGIN_CPP)
+        self.assertIn("pfnWriteLong(money)", PLUGIN_CPP)
+        self.assertIn("pfnWriteByte(flash ? 1 : 0)", PLUGIN_CPP)
+        self.assertIn("int MoneyMessageId()", PLUGIN_H)
 
 
 if __name__ == "__main__":
