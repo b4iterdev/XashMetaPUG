@@ -6,3 +6,4 @@ build/
 *.dSYM/
 .DS_Store
 .sisyphus/run-continuation/
+*.py
