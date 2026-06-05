@@ -365,7 +365,7 @@ void Plugin::FinishLO3()
     lastObservedTScore_ = 0;
     lastObservedCTScore_ = 0;
     SetState(pendingLiveState_);
-    ServerCommand("sv_restart 1\n");
+    ServerCommand("sv_restart 3\n");
     ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
     Log("[XMP] LIVE LIVE LIVE!");
 }
