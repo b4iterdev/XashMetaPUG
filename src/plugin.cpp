@@ -409,7 +409,7 @@ void Plugin::SwapTeams()
     this->restarting_ = true;
     ServerCommand("swapteams\n");
     std::swap(terroristScore_, ctScore_);
-    UpdateScoreboard();
+    Schedule("update_scoreboard", 0.1f, false, [this]() { UpdateScoreboard(); });
     Broadcast("[XMP] Tracked team scores swapped. Players should switch sides now if automatic team switch is unavailable.\n");
 }
 
@@ -609,7 +609,7 @@ int Plugin::ConnectedPlayers() const
 {
     int count = 0;
     for (int i = 1; i <= kMaxClients; ++i) {
-        if (players_[i].connected) ++count;
+        if (players_[i].connected && !FNullEnt(INDEXENT(i))) ++count;
     }
     return count;
 }
@@ -618,7 +618,7 @@ int Plugin::ReadyPlayers() const
 {
     int count = 0;
     for (int i = 1; i <= kMaxClients; ++i) {
-        if (players_[i].connected && players_[i].ready) ++count;
+        if (players_[i].connected && players_[i].ready && !FNullEnt(INDEXENT(i))) ++count;
     }
     return count;
 }
