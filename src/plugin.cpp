@@ -376,8 +376,9 @@ void Plugin::StartLO3(MatchState liveState)
 
 void Plugin::FinishLO3()
 {
-    lastObservedTScore_ = 0;
-    lastObservedCTScore_ = 0;
+    this->restarting_ = false;
+    lastObservedTScore_ = terroristScore_;
+    lastObservedCTScore_ = ctScore_;
     SetState(pendingLiveState_);
     ServerCommand("sv_restart 3\n");
     ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
@@ -449,8 +450,8 @@ void Plugin::SwapTeams()
 void Plugin::HandleRoundScore(Team team, int score)
 {
     if (this->syncingScoreboard_ || this->restarting_) {
-        lastObservedTScore_ = score;
-        lastObservedCTScore_ = score;
+        if (team == Team::Terrorist) lastObservedTScore_ = score;
+        if (team == Team::CounterTerrorist) lastObservedCTScore_ = score;
         return;
     }
 
