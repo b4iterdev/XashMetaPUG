@@ -137,12 +137,23 @@ void Plugin::OnWriteByte(int value) { message_.numbers.push_back(value); }
 void Plugin::OnWriteChar(int value) { message_.numbers.push_back(value); }
 void Plugin::OnWriteShort(int value) { message_.numbers.push_back(value); }
 void Plugin::OnWriteLong(int value) { message_.numbers.push_back(value); }
-void Plugin::OnWriteString(const char *value) { message_.strings.emplace_back(value ? value : ""); }
+void Plugin::OnWriteString(const char *value) { 
+    message_.strings.emplace_back(value ? value : ""); 
+    if (message_.name == "TextMsg" && value && strstr(value, "#Game_Commencing")) {
+        Log("Detected Game Commencing, resetting match state.");
+        ResetMatch(true);
+        SetState(MatchState::Warmup);
+    }
+}
 
 void Plugin::OnMessageEnd()
 {
     if (CvarInt(cvars_.debugMessages) > 0 && !message_.name.empty()) {
         Log("msg=%s strings=%zu nums=%zu", message_.name.c_str(), message_.strings.size(), message_.numbers.size());
+    }
+
+    if (message_.name == "TextMsg") {
+        return;
     }
 
     if (message_.name == "TeamScore" && !message_.strings.empty() && !message_.numbers.empty()) {
