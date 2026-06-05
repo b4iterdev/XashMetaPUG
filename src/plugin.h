@@ -36,6 +36,8 @@ enum class MatchState {
     Disabled,
     Warmup,
     WaitingReady,
+    KnifeRound,
+    SideSelection,
     StartingLO3,
     FirstHalf,
     HalfTime,
@@ -126,6 +128,7 @@ private:
     void StartReady();
     void CheckReady();
     void StartMatch(bool force);
+    void StartKnifeRound();
     void StartLO3(MatchState liveState);
     void FinishLO3();
     void StopMatch();
@@ -134,6 +137,8 @@ private:
     void UnpauseMatch();
     void SwapTeams();
     void HandleRoundScore(Team team, int score);
+    void HandleKnifeRoundScore(Team team, int score);
+    void HandleSideSelection(edict_t *entity, bool swapSides);
     void EvaluateMatchProgress();
     void EnterHalftime();
     void EnterOvertime();
@@ -144,6 +149,8 @@ private:
     bool DispatchPlayerCommand(edict_t *entity, const std::string &command);
     bool DispatchAdminCommand(edict_t *entity, const std::string &command);
     bool IsAdmin(edict_t *entity) const;
+    bool IsLiveState(MatchState state) const;
+    bool IsSideSwitchBlocked(MatchState state) const;
     bool IsConnectedPlayerIndex(int index) const;
     int PlayerIndex(edict_t *entity) const;
     int ConnectedPlayers() const;
@@ -179,11 +186,16 @@ private:
     int overtimeRoundCount_ = 0;
     int terroristScore_ = 0;
     int ctScore_ = 0;
+    int overtimeTerroristStartScore_ = 0;
+    int overtimeCTStartScore_ = 0;
     int lastObservedTScore_ = 0;
     int lastObservedCTScore_ = 0;
     bool paused_ = false;
     bool restarting_ = false;
     bool syncingScoreboard_ = false;
+    bool knifeRoundCompleted_ = false;
+    bool sideSelectionPending_ = false;
+    Team knifeWinner_ = Team::Unknown;
 
     struct MessageCapture {
         int type = 0;

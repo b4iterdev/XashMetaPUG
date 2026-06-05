@@ -113,6 +113,11 @@ bool Plugin::OnClientCommand(edict_t *entity)
         return false;
     }
 
+    if (strcasecmp(cmd, "jointeam") == 0 && IsSideSwitchBlocked(state_)) {
+        Say(entity, "[XMP] Side switching is disabled while LIVE.\n");
+        return true;
+    }
+
     if (strcasecmp(cmd, "say") == 0 || strcasecmp(cmd, "say_team") == 0) {
         const char *args = g_engfuncs.pfnCmd_Args();
         if (!args) {
@@ -252,9 +257,16 @@ void Plugin::ResetMatch(bool keepWarmup)
     overtimeRoundCount_ = 0;
     terroristScore_ = 0;
     ctScore_ = 0;
+    overtimeTerroristStartScore_ = 0;
+    overtimeCTStartScore_ = 0;
     lastObservedTScore_ = 0;
     lastObservedCTScore_ = 0;
     paused_ = false;
+    restarting_ = false;
+    syncingScoreboard_ = false;
+    knifeRoundCompleted_ = false;
+    sideSelectionPending_ = false;
+    knifeWinner_ = Team::Unknown;
     state_ = keepWarmup ? MatchState::Warmup : MatchState::Disabled;
 }
 
@@ -317,6 +329,9 @@ bool Plugin::IsSafeConfigPath(const std::string &path) const
 
 void Plugin::StartReady()
 {
+    if (state_ == MatchState::Finished) {
+        ResetMatch(true);
+    }
     for (auto &player : players_) {
         player.ready = false;
     }
@@ -341,6 +356,9 @@ void Plugin::CheckReady()
 
 void Plugin::StartMatch(bool force)
 {
+    if (state_ == MatchState::Finished) {
+        ResetMatch(true);
+    }
     if (!force && ConnectedPlayers() < CvarInt(cvars_.playersMin)) {
         Broadcast("[XMP] Need %d player(s) to start.\n", CvarInt(cvars_.playersMin));
         return;
@@ -351,7 +369,22 @@ void Plugin::StartMatch(bool force)
     } else if (state_ == MatchState::Finished || state_ == MatchState::Disabled || state_ == MatchState::Warmup || state_ == MatchState::WaitingReady) {
         pendingLiveState_ = MatchState::FirstHalf;
     }
+    if (pendingLiveState_ == MatchState::FirstHalf && !knifeRoundCompleted_) {
+        StartKnifeRound();
+        return;
+    }
     StartLO3(pendingLiveState_);
+}
+
+void Plugin::StartKnifeRound()
+{
+    pendingLiveState_ = MatchState::FirstHalf;
+    sideSelectionPending_ = false;
+    knifeWinner_ = Team::Unknown;
+    restarting_ = true;
+    SetState(MatchState::KnifeRound);
+    Broadcast("[XMP] Knife round starting. Winner chooses side with .stay or .swap.\n");
+    ServerCommand("sv_restart 1\n");
 }
 
 void Plugin::StartLO3(MatchState liveState)
@@ -440,7 +473,8 @@ void Plugin::SwapTeams()
         }
 
         const int targetTeam = (players_[i].team == Team::Terrorist) ? 2 : 1;
-        g_engfuncs.pfnClientCommand(entity, "jointeam %d\n", targetTeam);
+        char joinCommand[] = "jointeam %d\n";
+        g_engfuncs.pfnClientCommand(entity, joinCommand, targetTeam);
         if (targetTeam == 2) ++movedT;
         else ++movedCT;
     }
@@ -451,6 +485,11 @@ void Plugin::SwapTeams()
 
 void Plugin::HandleRoundScore(Team team, int score)
 {
+    if (state_ == MatchState::KnifeRound) {
+        HandleKnifeRoundScore(team, score);
+        return;
+    }
+
     if (this->syncingScoreboard_ || this->restarting_) {
         if (team == Team::Terrorist) lastObservedTScore_ = score;
         if (team == Team::CounterTerrorist) lastObservedCTScore_ = score;
@@ -487,6 +526,58 @@ void Plugin::HandleRoundScore(Team team, int score)
     }
 }
 
+void Plugin::HandleKnifeRoundScore(Team team, int score)
+{
+    if (team != Team::Terrorist && team != Team::CounterTerrorist) {
+        return;
+    }
+
+    bool increment = false;
+    if (team == Team::Terrorist && score > lastObservedTScore_) {
+        increment = true;
+    } else if (team == Team::CounterTerrorist && score > lastObservedCTScore_) {
+        increment = true;
+    }
+
+    if (team == Team::Terrorist) lastObservedTScore_ = score;
+    if (team == Team::CounterTerrorist) lastObservedCTScore_ = score;
+
+    if (!increment || sideSelectionPending_) {
+        return;
+    }
+
+    const Team winningTeam = team;
+    knifeWinner_ = winningTeam;
+    knifeRoundCompleted_ = true;
+    sideSelectionPending_ = true;
+    restarting_ = false;
+    SetState(MatchState::SideSelection);
+    Broadcast("[XMP] Knife round winner: %s. Winning players type .stay or .swap.\n", TeamName(knifeWinner_));
+}
+
+void Plugin::HandleSideSelection(edict_t *entity, bool swapSides)
+{
+    UpdatePlayer(entity);
+    const int index = PlayerIndex(entity);
+    if (state_ != MatchState::SideSelection || !sideSelectionPending_) {
+        Say(entity, "[XMP] No side selection is pending.\n");
+        return;
+    }
+    if (!IsConnectedPlayerIndex(index) || players_[index].team != knifeWinner_) {
+        Say(entity, "[XMP] Only a player from the knife-winning side can choose.\n");
+        return;
+    }
+
+    sideSelectionPending_ = false;
+    if (swapSides) {
+        Broadcast("[XMP] Knife winner chose to swap sides.\n");
+        SwapTeams();
+    } else {
+        Broadcast("[XMP] Knife winner chose to stay.\n");
+    }
+    StartLO3(MatchState::FirstHalf);
+}
+
 void Plugin::EvaluateMatchProgress()
 {
     Log("EvaluateMatchProgress: state=%s, totalRounds=%d, halfRounds=%d, terrorist=%d, ct=%d", StateName(state_), totalRoundCount_, halfRoundCount_, terroristScore_, ctScore_);
@@ -521,7 +612,9 @@ void Plugin::EvaluateMatchProgress()
     }
 
     if (state_ == MatchState::Overtime) {
-        if (overtimeFirstTo > 0 && (terroristScore_ >= overtimeFirstTo || ctScore_ >= overtimeFirstTo)) {
+        const int overtimeTerroristScore = terroristScore_ - overtimeTerroristStartScore_;
+        const int overtimeCTScore = ctScore_ - overtimeCTStartScore_;
+        if (overtimeFirstTo > 0 && (overtimeTerroristScore >= overtimeFirstTo || overtimeCTScore >= overtimeFirstTo)) {
             FinishMatch();
             return;
         }
@@ -548,6 +641,8 @@ void Plugin::EnterHalftime()
 void Plugin::EnterOvertime()
 {
     overtimeRoundCount_ = 0;
+    overtimeTerroristStartScore_ = terroristScore_;
+    overtimeCTStartScore_ = ctScore_;
     pendingLiveState_ = MatchState::Overtime;
     SetState(MatchState::Overtime);
     Broadcast("[XMP] Overtime started.\n");
@@ -590,6 +685,10 @@ bool Plugin::DispatchPlayerCommand(edict_t *entity, const std::string &command)
         CheckReady();
     } else if (normalized == "notready") {
         SetReady(entity, false);
+    } else if (normalized == "stay") {
+        HandleSideSelection(entity, false);
+    } else if (normalized == "swap") {
+        HandleSideSelection(entity, true);
     } else if (normalized == "status") {
         Say(entity, "[XMP] State: %s. Ready %d/%d. Players %d/%d.\n", StateName(state_), ReadyPlayers(), GetRequiredReadyCount(), ConnectedPlayers(), CvarInt(cvars_.playersMax));
     } else if (normalized == "score") {
@@ -616,7 +715,13 @@ bool Plugin::DispatchAdminCommand(edict_t *entity, const std::string &command)
     else if (normalized == "restart") RestartMatch();
     else if (normalized == "pause") PauseMatch();
     else if (normalized == "unpause") UnpauseMatch();
-    else if (normalized == "swap") SwapTeams();
+    else if (normalized == "swap") {
+        if (IsLiveState(state_)) {
+            Say(entity, "[XMP] Side switching is disabled while LIVE.\n");
+        } else {
+            SwapTeams();
+        }
+    }
     else if (normalized == "score") Broadcast("[XMP] Score T %d - CT %d. Round %d/%d.\n", terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
     else if (normalized == "reload") { LoadAdmins(); Broadcast("[XMP] Admin list reloaded.\n"); }
     else return false;
@@ -627,6 +732,16 @@ bool Plugin::IsAdmin(edict_t *entity) const
 {
     const int index = PlayerIndex(entity);
     return IsConnectedPlayerIndex(index) && players_[index].admin;
+}
+
+bool Plugin::IsLiveState(MatchState state) const
+{
+    return state == MatchState::FirstHalf || state == MatchState::SecondHalf || state == MatchState::Overtime;
+}
+
+bool Plugin::IsSideSwitchBlocked(MatchState state) const
+{
+    return IsLiveState(state) || state == MatchState::KnifeRound || state == MatchState::SideSelection;
 }
 
 bool Plugin::IsConnectedPlayerIndex(int index) const
@@ -796,6 +911,8 @@ const char *Plugin::StateName(MatchState state) const
     case MatchState::Disabled: return "Disabled";
     case MatchState::Warmup: return "Warmup";
     case MatchState::WaitingReady: return "WaitingReady";
+    case MatchState::KnifeRound: return "KnifeRound";
+    case MatchState::SideSelection: return "SideSelection";
     case MatchState::StartingLO3: return "StartingLO3";
     case MatchState::FirstHalf: return "FirstHalf";
     case MatchState::HalfTime: return "HalfTime";
