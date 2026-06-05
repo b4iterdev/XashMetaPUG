@@ -98,6 +98,7 @@ public:
     void OnServerActivate();
     void OnServerDeactivate();
     void OnStartFrame();
+    bool OnClientConnect(edict_t *entity, const char *name);
     void OnClientPutInServer(edict_t *entity);
     void OnClientDisconnect(edict_t *entity);
     bool OnClientCommand(edict_t *entity);

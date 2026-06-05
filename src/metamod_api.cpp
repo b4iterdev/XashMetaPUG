@@ -11,6 +11,14 @@ META_FUNCTIONS g_metaFunctions;
 DLL_FUNCTIONS g_dllFunctions;
 enginefuncs_t g_engineFunctions;
 
+BOOL DLL_ClientConnect(edict_t *entity, const char *name, const char *address, char rejectReason[128])
+{
+    if (!xmp::GetPlugin().OnClientConnect(entity, name)) {
+        RETURN_META_VALUE(MRES_SUPERCEDE, FALSE);
+    }
+    RETURN_META_VALUE(MRES_IGNORED, TRUE);
+}
+
 void DLL_ServerActivate(edict_t *edictList, int edictCount, int clientMax)
 {
     xmp::GetPlugin().OnServerActivate();
@@ -115,6 +123,7 @@ C_DLLEXPORT int Meta_Detach(PLUG_LOADTIME now, PL_UNLOAD_REASON reason)
 C_DLLEXPORT int GetEntityAPI2(DLL_FUNCTIONS *functionTable, int *interfaceVersion)
 {
     std::memset(&g_dllFunctions, 0, sizeof(g_dllFunctions));
+    g_dllFunctions.pfnClientConnect = DLL_ClientConnect;
     g_dllFunctions.pfnServerActivate = DLL_ServerActivate;
     g_dllFunctions.pfnServerDeactivate = DLL_ServerDeactivate;
     g_dllFunctions.pfnStartFrame = DLL_StartFrame;

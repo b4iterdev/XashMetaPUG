@@ -54,6 +54,22 @@ void Plugin::OnStartFrame()
     }
 }
 
+bool Plugin::OnClientConnect(edict_t *entity, const char *name)
+{
+    const int index = PlayerIndex(entity);
+    if (index <= 0 || index > kMaxClients) {
+        return true;
+    }
+
+    PlayerInfo &player = players_[index];
+    player.connected = true;
+    player.ready = false;
+    player.name = (name && name[0] != '\0') ? name : Format("player%d", index);
+    player.authId.clear();
+    player.admin = false;
+    return true;
+}
+
 void Plugin::OnClientPutInServer(edict_t *entity)
 {
     UpdatePlayer(entity);
