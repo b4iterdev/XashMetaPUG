@@ -115,7 +115,7 @@ Paths containing `..`, spaces, quotes, semicolons, newlines, or paths outside th
 ## Known Limitations
 
 - Round-end detection is inferred from `TeamScore` messages because ReGameDLL hooks are intentionally not used.
-- Knife-round winner detection is also inferred from `TeamScore`; the plugin gates side choice before first LIVE, but it does not enforce weapon stripping without ReGameDLL/AMXX helpers.
+- Knife-round winner detection is also inferred from `TeamScore`; the plugin gates side choice before first LIVE and uses Metamod-only cvars/client commands to block buy, zero knife-round money, and repeatedly drop non-knife weapons. Direct inventory mutation still requires ReGameDLL/AMXX helpers.
 - Automatic side swapping is not yet guaranteed across Xash3D/CS builds; MVP swaps tracked scores and announces manual side switching.
 - `!pause` is a minimal timed pause helper using `pausable`; exact behavior must be validated on the target Xash3D server build.
 - Full damage stats are deferred because MatchBot's implementation depends on damage hooks unavailable in Metamod-only mode.
