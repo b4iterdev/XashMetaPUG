@@ -349,11 +349,11 @@ void Plugin::StartLO3(MatchState liveState)
     }
     Schedule("lo3", 1.0f, true, [this]() {
         ++lo3Step_;
-        if (lo3Step_ <= 3) {
-            Broadcast("[XMP] Live on three restart %d/3.\n", lo3Step_);
+        if (lo3Step_ <= 2) {
+            Broadcast("[XMP] Live on three restart %d/2.\n", lo3Step_);
             ServerCommand("sv_restart 1\n");
         }
-        if (lo3Step_ >= 3) {
+        if (lo3Step_ >= 2) {
             CancelTask("lo3");
             Schedule("lo3_finish", 2.0f, false, [this]() { FinishLO3(); });
         }
@@ -365,6 +365,7 @@ void Plugin::FinishLO3()
     lastObservedTScore_ = 0;
     lastObservedCTScore_ = 0;
     SetState(pendingLiveState_);
+    ServerCommand("sv_restart 1\n");
     ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
     Log("[XMP] LIVE LIVE LIVE!");
 }
