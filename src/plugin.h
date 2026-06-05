@@ -137,6 +137,7 @@ private:
     void EnterHalftime();
     void EnterOvertime();
     void FinishMatch();
+    int GetRequiredReadyCount() const;
 
     bool DispatchCommand(edict_t *entity, const std::string &raw);
     bool DispatchPlayerCommand(edict_t *entity, const std::string &command);
