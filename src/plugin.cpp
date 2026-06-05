@@ -413,8 +413,12 @@ void xmp::Plugin::SwapTeams()
         edict_t *entity = INDEXENT(i);
         if (FNullEnt(entity)) continue;
 
+        Log("SwapTeams: Player %d (%s) current team: %d", i, players_[i].name.c_str(), (int)players_[i].team);
+
         const int targetTeam = (players_[i].team == Team::Terrorist) ? 2 : 1;
+        g_engfuncs.pfnClientCommand(entity, "chooseteam\n");
         g_engfuncs.pfnClientCommand(entity, "jointeam %d\n", targetTeam);
+        Log("SwapTeams: Player %d joined team %d", i, targetTeam);
     }
 
     std::swap(terroristScore_, ctScore_);
