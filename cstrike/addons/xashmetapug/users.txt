@@ -1,0 +1,4 @@
+// One admin SteamID/AuthID per line. Examples:
+// STEAM_0:1:12345
+// VALVE_0:1:12345
+// Player names are intentionally unsupported because names are user-controlled.
