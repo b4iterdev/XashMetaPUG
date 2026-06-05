@@ -59,6 +59,7 @@ struct PlayerInfo {
     bool admin = false;
     int userId = 0;
     Team team = Team::Unknown;
+    std::vector<int> scoreInfoValues;
     std::string authId;
     std::string name;
 };
@@ -107,13 +108,13 @@ public:
     void OnClientDisconnect(edict_t *entity);
     bool OnClientCommand(edict_t *entity);
 
-    void OnMessageBegin(int destination, int type, const float *origin, edict_t *entity);
-    void OnWriteByte(int value);
-    void OnWriteChar(int value);
-    void OnWriteShort(int value);
-    void OnWriteLong(int value);
-    void OnWriteString(const char *value);
-    void OnMessageEnd();
+    bool OnMessageBegin(int destination, int type, const float *origin, edict_t *entity);
+    bool OnWriteByte(int value);
+    bool OnWriteChar(int value);
+    bool OnWriteShort(int value);
+    bool OnWriteLong(int value);
+    bool OnWriteString(const char *value);
+    bool OnMessageEnd();
     void ForceStartFromServer();
 
 private:
@@ -136,6 +137,8 @@ private:
     void PauseMatch();
     void UnpauseMatch();
     void SwapTeams();
+    void SwapSideScores();
+    bool ShouldPreservePlayerScores(MatchState liveState) const;
     void HandleRoundScore(Team team, int score);
     void HandleKnifeRoundScore(Team team, int score);
     void HandleSideSelection(edict_t *entity, bool swapSides);
@@ -144,6 +147,16 @@ private:
     void EnterOvertime();
     void FinishMatch();
     int GetRequiredReadyCount() const;
+    bool ShouldRewriteTeamScoreMessage() const;
+    void CacheScoreInfo();
+    void SendTeamScore(Team team);
+    void SendTeamScoreMessages();
+    void SendScoreInfo(int index);
+    void ReplayAllScoreInfo();
+    int TeamScoreMessageId();
+    int ScoreInfoMessageId();
+    const char *EngineTeamScoreName(Team team) const;
+    int TeamNumber(Team team) const;
 
     bool DispatchCommand(edict_t *entity, const std::string &raw);
     bool DispatchPlayerCommand(edict_t *entity, const std::string &command);
@@ -195,10 +208,16 @@ private:
     bool syncingScoreboard_ = false;
     bool knifeRoundCompleted_ = false;
     bool sideSelectionPending_ = false;
+    bool suppressCurrentMessage_ = false;
+    bool replayingScoreMessages_ = false;
     Team knifeWinner_ = Team::Unknown;
+    int teamScoreMessageId_ = 0;
+    int scoreInfoMessageId_ = 0;
 
     struct MessageCapture {
+        int destination = 0;
         int type = 0;
+        edict_t *entity = nullptr;
         std::string name;
         std::vector<int> numbers;
         std::vector<std::string> strings;

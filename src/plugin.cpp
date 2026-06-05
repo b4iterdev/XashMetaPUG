@@ -133,22 +133,28 @@ bool Plugin::OnClientCommand(edict_t *entity)
     return DispatchCommand(entity, cmd);
 }
 
-void Plugin::OnMessageBegin(int destination, int type, const float *origin, edict_t *entity)
+bool Plugin::OnMessageBegin(int destination, int type, const float *origin, edict_t *entity)
 {
     message_ = MessageCapture{};
+    message_.destination = destination;
     message_.type = type;
+    message_.entity = entity;
+    suppressCurrentMessage_ = false;
     int size = 0;
     const char *name = gpMetaUtilFuncs ? GET_USER_MSG_NAME(PLID, type, &size) : nullptr;
     if (name) {
         message_.name = name;
     }
+
+    suppressCurrentMessage_ = message_.name == "TeamScore" && ShouldRewriteTeamScoreMessage() && !replayingScoreMessages_;
+    return suppressCurrentMessage_;
 }
 
-void Plugin::OnWriteByte(int value) { message_.numbers.push_back(value); }
-void Plugin::OnWriteChar(int value) { message_.numbers.push_back(value); }
-void Plugin::OnWriteShort(int value) { message_.numbers.push_back(value); }
-void Plugin::OnWriteLong(int value) { message_.numbers.push_back(value); }
-void Plugin::OnWriteString(const char *value) {
+bool Plugin::OnWriteByte(int value) { message_.numbers.push_back(value); return suppressCurrentMessage_; }
+bool Plugin::OnWriteChar(int value) { message_.numbers.push_back(value); return suppressCurrentMessage_; }
+bool Plugin::OnWriteShort(int value) { message_.numbers.push_back(value); return suppressCurrentMessage_; }
+bool Plugin::OnWriteLong(int value) { message_.numbers.push_back(value); return suppressCurrentMessage_; }
+bool Plugin::OnWriteString(const char *value) {
     message_.strings.emplace_back(value ? value : "");
     if (message_.name == "TextMsg" && value && strstr(value, "#Game_Commencing")) {
         if (state_ == MatchState::Disabled) {
@@ -159,20 +165,29 @@ void Plugin::OnWriteString(const char *value) {
             Log("Detected Game Commencing while in state %s, ignoring (mid-match/round).", StateName(state_));
         }
     }
+    return suppressCurrentMessage_;
 }
 
-void Plugin::OnMessageEnd()
+bool Plugin::OnMessageEnd()
 {
+    const bool suppressMessage = suppressCurrentMessage_;
     if (CvarInt(cvars_.debugMessages) > 0 && !message_.name.empty()) {
         Log("msg=%s strings=%zu nums=%zu", message_.name.c_str(), message_.strings.size(), message_.numbers.size());
     }
 
     if (message_.name == "TextMsg") {
-        return;
+        suppressCurrentMessage_ = false;
+        return suppressMessage;
     }
 
     if (message_.name == "TeamScore" && !message_.strings.empty() && !message_.numbers.empty()) {
-        HandleRoundScore(ParseTeamName(message_.strings[0]), message_.numbers[0]);
+        const Team team = ParseTeamName(message_.strings[0]);
+        HandleRoundScore(team, message_.numbers[0]);
+        if (suppressMessage) {
+            SendTeamScore(team);
+        }
+    } else if (message_.name == "ScoreInfo" && !message_.numbers.empty()) {
+        CacheScoreInfo();
     } else if (message_.name == "TeamInfo" && !message_.strings.empty() && !message_.numbers.empty()) {
         const int index = message_.numbers[0];
         if (IsConnectedPlayerIndex(index)) {
@@ -186,6 +201,8 @@ void Plugin::OnMessageEnd()
             }
         }
     }
+    suppressCurrentMessage_ = false;
+    return suppressMessage;
 }
 
 void Plugin::RegisterCvars()
@@ -391,16 +408,19 @@ void Plugin::StartLO3(MatchState liveState)
 {
     pendingLiveState_ = liveState;
     lo3Step_ = 0;
+    const bool preservePlayerScores = ShouldPreservePlayerScores(liveState);
     SetState(MatchState::StartingLO3);
     if (CvarInt(cvars_.lo3Enabled) <= 0) {
         FinishLO3();
         return;
     }
-    Schedule("lo3", 1.0f, true, [this]() {
+    Schedule("lo3", 1.0f, true, [this, preservePlayerScores]() {
         ++lo3Step_;
         if (lo3Step_ <= 2) {
             Broadcast("[XMP] Live on three restart %d/2.\n", lo3Step_);
-            ServerCommand("sv_restart 1\n");
+            if (!preservePlayerScores) {
+                ServerCommand("sv_restart 1\n");
+            }
         }
         if (lo3Step_ >= 2) {
             CancelTask("lo3");
@@ -415,8 +435,12 @@ void Plugin::FinishLO3()
     lastObservedTScore_ = terroristScore_;
     lastObservedCTScore_ = ctScore_;
     SetState(pendingLiveState_);
-    ServerCommand("sv_restart 3\n");
+    if (!ShouldPreservePlayerScores(pendingLiveState_)) {
+        ServerCommand("sv_restart 3\n");
+    }
     ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
+    SendTeamScoreMessages();
+    ReplayAllScoreInfo();
     Log("[XMP] LIVE LIVE LIVE!");
 }
 
@@ -481,6 +505,17 @@ void Plugin::SwapTeams()
     Log("SwapTeams: %d -> CT, %d -> T, %d skipped (spec/unknown)", movedT, movedCT, skipped);
 
     Broadcast("[XMP] Players have been switched. Team scores are tracked by the engine.\n");
+}
+
+void Plugin::SwapSideScores()
+{
+    std::swap(terroristScore_, ctScore_);
+    std::swap(lastObservedTScore_, lastObservedCTScore_);
+}
+
+bool Plugin::ShouldPreservePlayerScores(MatchState liveState) const
+{
+    return liveState == MatchState::SecondHalf;
 }
 
 void Plugin::HandleRoundScore(Team team, int score)
@@ -578,6 +613,102 @@ void Plugin::HandleSideSelection(edict_t *entity, bool swapSides)
     StartLO3(MatchState::FirstHalf);
 }
 
+bool Plugin::ShouldRewriteTeamScoreMessage() const
+{
+    return state_ == MatchState::HalfTime || state_ == MatchState::StartingLO3 || IsLiveState(state_);
+}
+
+void Plugin::CacheScoreInfo()
+{
+    const int index = message_.numbers[0];
+    if (!IsConnectedPlayerIndex(index)) {
+        return;
+    }
+    players_[index].scoreInfoValues = message_.numbers;
+}
+
+void Plugin::SendTeamScore(Team team)
+{
+    const int messageId = TeamScoreMessageId();
+    if (messageId <= 0 || (team != Team::Terrorist && team != Team::CounterTerrorist)) {
+        return;
+    }
+
+    replayingScoreMessages_ = true;
+    g_engfuncs.pfnMessageBegin(MSG_ALL, messageId, nullptr, nullptr);
+    g_engfuncs.pfnWriteString(EngineTeamScoreName(team));
+    g_engfuncs.pfnWriteShort(team == Team::Terrorist ? terroristScore_ : ctScore_);
+    g_engfuncs.pfnMessageEnd();
+    replayingScoreMessages_ = false;
+}
+
+void Plugin::SendTeamScoreMessages()
+{
+    SendTeamScore(Team::CounterTerrorist);
+    SendTeamScore(Team::Terrorist);
+}
+
+void Plugin::SendScoreInfo(int index)
+{
+    if (!IsConnectedPlayerIndex(index) || players_[index].scoreInfoValues.empty()) {
+        return;
+    }
+    const int messageId = ScoreInfoMessageId();
+    if (messageId <= 0) {
+        return;
+    }
+
+    std::vector<int> values = players_[index].scoreInfoValues;
+    if (values.size() >= 5) {
+        values[4] = TeamNumber(players_[index].team);
+    }
+
+    replayingScoreMessages_ = true;
+    g_engfuncs.pfnMessageBegin(MSG_ALL, messageId, nullptr, nullptr);
+    g_engfuncs.pfnWriteByte(values[0]);
+    for (size_t i = 1; i < values.size(); ++i) {
+        g_engfuncs.pfnWriteShort(values[i]);
+    }
+    g_engfuncs.pfnMessageEnd();
+    replayingScoreMessages_ = false;
+}
+
+void Plugin::ReplayAllScoreInfo()
+{
+    for (int i = 1; i <= kMaxClients; ++i) {
+        SendScoreInfo(i);
+    }
+}
+
+int Plugin::TeamScoreMessageId()
+{
+    if (teamScoreMessageId_ <= 0 && gpMetaUtilFuncs) {
+        teamScoreMessageId_ = GET_USER_MSG_ID(PLID, "TeamScore", nullptr);
+    }
+    return teamScoreMessageId_;
+}
+
+int Plugin::ScoreInfoMessageId()
+{
+    if (scoreInfoMessageId_ <= 0 && gpMetaUtilFuncs) {
+        scoreInfoMessageId_ = GET_USER_MSG_ID(PLID, "ScoreInfo", nullptr);
+    }
+    return scoreInfoMessageId_;
+}
+
+const char *Plugin::EngineTeamScoreName(Team team) const
+{
+    return team == Team::CounterTerrorist ? "CT" : "TERRORIST";
+}
+
+int Plugin::TeamNumber(Team team) const
+{
+    if (team == Team::Terrorist) return 1;
+    if (team == Team::CounterTerrorist) return 2;
+    if (team == Team::Spectator) return 3;
+    return 0;
+}
+
 void Plugin::EvaluateMatchProgress()
 {
     Log("EvaluateMatchProgress: state=%s, totalRounds=%d, halfRounds=%d, terrorist=%d, ct=%d", StateName(state_), totalRoundCount_, halfRoundCount_, terroristScore_, ctScore_);
@@ -634,6 +765,7 @@ void Plugin::EnterHalftime()
     pendingLiveState_ = MatchState::SecondHalf;
     SetState(MatchState::HalfTime);
     Broadcast("[XMP] Halftime. Score T %d - CT %d. Swap sides and type .ready.\n", terroristScore_, ctScore_);
+    SwapSideScores();
     SwapTeams();
     StartReady();
 }

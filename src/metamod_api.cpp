@@ -59,20 +59,18 @@ void DLL_ClientCommand(edict_t *entity)
 
 void ENG_MessageBegin(int destination, int type, const float *origin, edict_t *entity)
 {
-    xmp::GetPlugin().OnMessageBegin(destination, type, origin, entity);
-    RETURN_META(MRES_IGNORED);
+    RETURN_META(xmp::GetPlugin().OnMessageBegin(destination, type, origin, entity) ? MRES_SUPERCEDE : MRES_IGNORED);
 }
 
-void ENG_WriteByte(int value) { xmp::GetPlugin().OnWriteByte(value); RETURN_META(MRES_IGNORED); }
-void ENG_WriteChar(int value) { xmp::GetPlugin().OnWriteChar(value); RETURN_META(MRES_IGNORED); }
-void ENG_WriteShort(int value) { xmp::GetPlugin().OnWriteShort(value); RETURN_META(MRES_IGNORED); }
-void ENG_WriteLong(int value) { xmp::GetPlugin().OnWriteLong(value); RETURN_META(MRES_IGNORED); }
-void ENG_WriteString(const char *value) { xmp::GetPlugin().OnWriteString(value); RETURN_META(MRES_IGNORED); }
+void ENG_WriteByte(int value) { RETURN_META(xmp::GetPlugin().OnWriteByte(value) ? MRES_SUPERCEDE : MRES_IGNORED); }
+void ENG_WriteChar(int value) { RETURN_META(xmp::GetPlugin().OnWriteChar(value) ? MRES_SUPERCEDE : MRES_IGNORED); }
+void ENG_WriteShort(int value) { RETURN_META(xmp::GetPlugin().OnWriteShort(value) ? MRES_SUPERCEDE : MRES_IGNORED); }
+void ENG_WriteLong(int value) { RETURN_META(xmp::GetPlugin().OnWriteLong(value) ? MRES_SUPERCEDE : MRES_IGNORED); }
+void ENG_WriteString(const char *value) { RETURN_META(xmp::GetPlugin().OnWriteString(value) ? MRES_SUPERCEDE : MRES_IGNORED); }
 
 void ENG_MessageEnd()
 {
-    xmp::GetPlugin().OnMessageEnd();
-    RETURN_META(MRES_IGNORED);
+    RETURN_META(xmp::GetPlugin().OnMessageEnd() ? MRES_SUPERCEDE : MRES_IGNORED);
 }
 } // namespace
 
