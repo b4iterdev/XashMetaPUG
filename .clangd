@@ -1,0 +1,14 @@
+CompileFlags:
+  Add:
+    - -std=c++17
+    - -D_LINUX
+    - -Dlinux
+    - -Dstricmp=strcasecmp
+    - -D_stricmp=strcasecmp
+    - -Iinclude/darwin-compat
+    - -I/Users/b4iterdev/MatchBot/MatchBot/include/cssdk/common
+    - -I/Users/b4iterdev/MatchBot/MatchBot/include/cssdk/dlls
+    - -I/Users/b4iterdev/MatchBot/MatchBot/include/cssdk/engine
+    - -I/Users/b4iterdev/MatchBot/MatchBot/include/cssdk/pm_shared
+    - -I/Users/b4iterdev/MatchBot/MatchBot/include/cssdk/public
+    - -I/Users/b4iterdev/MatchBot/MatchBot/include/metamod
