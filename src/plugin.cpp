@@ -56,7 +56,7 @@ void Plugin::OnStartFrame()
 
 void Plugin::OnClientPutInServer(edict_t *entity)
 {
-    UpdatePlayer(entity, false);
+    UpdatePlayer(entity);
     if (state_ == MatchState::WaitingReady || state_ == MatchState::HalfTime) {
         Say(entity, "[XMP] Type .ready when ready.\n");
     }
@@ -545,7 +545,7 @@ int Plugin::ReadyPlayers() const
 
 void Plugin::SetReady(edict_t *entity, bool ready)
 {
-    UpdatePlayer(entity, true);
+    UpdatePlayer(entity);
     const int index = PlayerIndex(entity);
     if (!IsConnectedPlayerIndex(index)) {
         return;
@@ -554,7 +554,7 @@ void Plugin::SetReady(edict_t *entity, bool ready)
     Broadcast("[XMP] %s is %sready (%d/%d).\n", players_[index].name.c_str(), ready ? "" : "not ", ReadyPlayers(), CvarInt(cvars_.playersMin));
 }
 
-void Plugin::UpdatePlayer(edict_t *entity, bool resolveIdentity)
+void Plugin::UpdatePlayer(edict_t *entity)
 {
     const int index = PlayerIndex(entity);
     if (index <= 0 || index > kMaxClients) {
@@ -565,21 +565,6 @@ void Plugin::UpdatePlayer(edict_t *entity, bool resolveIdentity)
     if (player.name.empty()) {
         player.name = Format("player%d", index);
     }
-
-    if (!resolveIdentity) {
-        player.admin = !player.authId.empty() && admins_.count(player.authId) > 0;
-        return;
-    }
-
-    player.userId = g_engfuncs.pfnGetPlayerUserId(entity);
-
-    const char *netname = STRING(entity->v.netname);
-    if (netname && netname[0] != '\0') {
-        player.name = netname;
-    }
-
-    const char *auth = g_engfuncs.pfnGetPlayerAuthId(entity);
-    player.authId = (auth && auth[0] != '\0') ? auth : "";
     player.admin = !player.authId.empty() && admins_.count(player.authId) > 0;
 }
 
