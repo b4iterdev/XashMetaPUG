@@ -319,7 +319,8 @@ void Plugin::StartReady()
         player.ready = false;
     }
     SetState(MatchState::WaitingReady);
-    Broadcast("[XMP] Type .ready to start. Need %d player(s).\n", CvarInt(cvars_.playersMin));
+    const int required = GetRequiredReadyCount();
+    Broadcast("[XMP] Type .ready to start. Need %d player(s) of %d connected.\n", required, ConnectedPlayers());
     if (CvarInt(cvars_.readyType) == 2) {
         Schedule("ready_timer", CvarFloat(cvars_.readyTime), false, [this]() { StartMatch(true); });
     }
@@ -330,7 +331,7 @@ void Plugin::CheckReady()
     if (state_ != MatchState::WaitingReady && state_ != MatchState::HalfTime) {
         return;
     }
-    if (ReadyPlayers() >= CvarInt(cvars_.playersMin)) {
+    if (ReadyPlayers() >= GetRequiredReadyCount()) {
         Broadcast("[XMP] All required players are ready.\n");
         StartMatch(true);
     }
@@ -442,17 +443,7 @@ void Plugin::SwapTeams()
     }
     Log("SwapTeams: %d -> CT, %d -> T, %d skipped (spec/unknown)", movedT, movedCT, skipped);
 
-    std::swap(terroristScore_, ctScore_);
-    Schedule("update_scoreboard", 0.1f, false, [this]() { UpdateScoreboard(); });
-    Broadcast("[XMP] Tracked team scores swapped. Players should switch sides now.\n");
-}
-
-void Plugin::UpdateScoreboard()
-{
-    // NO-OP: Forcing TeamScore messages via pfnMessageBegin inside a message
-    // hook callback chain crashes the engine on Xash3D ARM64.
-    // Rely on the engine to sync the scoreboard naturally after sv_restart /
-    // round reset; tracked internal scores are still authoritative.
+    Broadcast("[XMP] Players have been switched. Team scores are tracked by the engine.\n");
 }
 
 void Plugin::HandleRoundScore(Team team, int score)
@@ -489,7 +480,6 @@ void Plugin::HandleRoundScore(Team team, int score)
             ++overtimeRoundCount_;
         }
         Broadcast("[XMP] Score T %d - CT %d. Round %d/%d.\n", terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
-        Schedule("update_scoreboard", 0.1f, false, [this]() { UpdateScoreboard(); });
         EvaluateMatchProgress();
     }
 }
@@ -524,8 +514,6 @@ void Plugin::EnterHalftime()
 {
     halfRoundCount_ = 0;
     pendingLiveState_ = MatchState::SecondHalf;
-    lastObservedTScore_ = 0;
-    lastObservedCTScore_ = 0;
     SetState(MatchState::HalfTime);
     Broadcast("[XMP] Halftime. Score T %d - CT %d. Swap sides and type .ready.\n", terroristScore_, ctScore_);
     SwapTeams();
@@ -578,7 +566,7 @@ bool Plugin::DispatchPlayerCommand(edict_t *entity, const std::string &command)
     } else if (normalized == "notready") {
         SetReady(entity, false);
     } else if (normalized == "status") {
-        Say(entity, "[XMP] State: %s. Ready %d/%d. Players %d/%d.\n", StateName(state_), ReadyPlayers(), CvarInt(cvars_.playersMin), ConnectedPlayers(), CvarInt(cvars_.playersMax));
+        Say(entity, "[XMP] State: %s. Ready %d/%d. Players %d/%d.\n", StateName(state_), ReadyPlayers(), GetRequiredReadyCount(), ConnectedPlayers(), CvarInt(cvars_.playersMax));
     } else if (normalized == "score") {
         Say(entity, "[XMP] Score T %d - CT %d. Round %d/%d.\n", terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
     } else if (normalized == "help") {
@@ -647,6 +635,12 @@ int Plugin::ReadyPlayers() const
     return count;
 }
 
+int Plugin::GetRequiredReadyCount() const
+{
+    const int required = std::min(CvarInt(cvars_.playersMin), ConnectedPlayers());
+    return required > 0 ? required : 1;
+}
+
 void Plugin::SetReady(edict_t *entity, bool ready)
 {
     UpdatePlayer(entity);
@@ -655,7 +649,7 @@ void Plugin::SetReady(edict_t *entity, bool ready)
         return;
     }
     players_[index].ready = ready;
-    Broadcast("[XMP] %s is %sready (%d/%d).\n", players_[index].name.c_str(), ready ? "" : "not ", ReadyPlayers(), CvarInt(cvars_.playersMin));
+    Broadcast("[XMP] %s is %sready (%d/%d).\n", players_[index].name.c_str(), ready ? "" : "not ", ReadyPlayers(), GetRequiredReadyCount());
 }
 
 void Plugin::UpdatePlayer(edict_t *entity)

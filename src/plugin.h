@@ -131,7 +131,6 @@ private:
     void PauseMatch();
     void UnpauseMatch();
     void SwapTeams();
-    void UpdateScoreboard();
     void HandleRoundScore(Team team, int score);
     void EvaluateMatchProgress();
     void EnterHalftime();
