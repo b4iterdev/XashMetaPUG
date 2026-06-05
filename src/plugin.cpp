@@ -143,12 +143,16 @@ void Plugin::OnWriteByte(int value) { message_.numbers.push_back(value); }
 void Plugin::OnWriteChar(int value) { message_.numbers.push_back(value); }
 void Plugin::OnWriteShort(int value) { message_.numbers.push_back(value); }
 void Plugin::OnWriteLong(int value) { message_.numbers.push_back(value); }
-void Plugin::OnWriteString(const char *value) { 
-    message_.strings.emplace_back(value ? value : ""); 
+void Plugin::OnWriteString(const char *value) {
+    message_.strings.emplace_back(value ? value : "");
     if (message_.name == "TextMsg" && value && strstr(value, "#Game_Commencing")) {
-        Log("Detected Game Commencing, resetting match state.");
-        ResetMatch(true);
-        SetState(MatchState::Warmup);
+        if (state_ == MatchState::Disabled) {
+            Log("Detected Game Commencing from Disabled, resetting to Warmup.");
+            ResetMatch(true);
+            SetState(MatchState::Warmup);
+        } else {
+            Log("Detected Game Commencing while in state %s, ignoring (mid-match/round).", StateName(state_));
+        }
     }
 }
 
@@ -164,10 +168,17 @@ void Plugin::OnMessageEnd()
 
     if (message_.name == "TeamScore" && !message_.strings.empty() && !message_.numbers.empty()) {
         HandleRoundScore(ParseTeamName(message_.strings[0]), message_.numbers[0]);
-    } else if (message_.name == "TeamInfo" && message_.strings.size() >= 2 && !message_.numbers.empty()) {
+    } else if (message_.name == "TeamInfo" && !message_.strings.empty() && !message_.numbers.empty()) {
         const int index = message_.numbers[0];
         if (IsConnectedPlayerIndex(index)) {
-            players_[index].team = ParseTeamName(message_.strings[1]);
+            const Team prev = players_[index].team;
+            players_[index].team = ParseTeamName(message_.strings[0]);
+            if (CvarInt(cvars_.debugMessages) > 0 && prev != players_[index].team) {
+                Log("TeamInfo: player %d (%s) %s -> %s (raw=%s)",
+                    index, players_[index].name.c_str(),
+                    TeamName(prev), TeamName(players_[index].team),
+                    message_.strings[0].c_str());
+            }
         }
     }
 }
@@ -410,16 +421,26 @@ void Plugin::UnpauseMatch()
 void Plugin::SwapTeams()
 {
     this->restarting_ = true;
+    int movedT = 0;
+    int movedCT = 0;
+    int skipped = 0;
     for (int i = 1; i <= kMaxClients; ++i) {
         if (!players_[i].connected || !IsConnectedPlayerIndex(i)) continue;
 
         edict_t *entity = INDEXENT(i);
         if (FNullEnt(entity)) continue;
 
+        if (players_[i].team != Team::Terrorist && players_[i].team != Team::CounterTerrorist) {
+            ++skipped;
+            continue;
+        }
+
         const int targetTeam = (players_[i].team == Team::Terrorist) ? 2 : 1;
-        g_engfuncs.pfnClientCommand(entity, "chooseteam\n");
         g_engfuncs.pfnClientCommand(entity, "jointeam %d\n", targetTeam);
+        if (targetTeam == 2) ++movedT;
+        else ++movedCT;
     }
+    Log("SwapTeams: %d -> CT, %d -> T, %d skipped (spec/unknown)", movedT, movedCT, skipped);
 
     std::swap(terroristScore_, ctScore_);
     Schedule("update_scoreboard", 0.1f, false, [this]() { UpdateScoreboard(); });
@@ -772,6 +793,17 @@ Team Plugin::ParseTeamName(const std::string &name) const
     if (name == "CT" || name == "Counter-Terrorist" || name == "Counter-Terrorists") return Team::CounterTerrorist;
     if (name == "SPECTATOR" || name == "Spectator") return Team::Spectator;
     return Team::Unknown;
+}
+
+const char *Plugin::TeamName(Team team) const
+{
+    switch (team) {
+    case Team::Terrorist: return "T";
+    case Team::CounterTerrorist: return "CT";
+    case Team::Spectator: return "SPEC";
+    case Team::Unknown: break;
+    }
+    return "?";
 }
 
 

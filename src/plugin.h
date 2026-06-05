@@ -164,6 +164,7 @@ private:
     float CvarFloat(const cvar_t &cvar) const;
     const char *StateName(MatchState state) const;
     Team ParseTeamName(const std::string &name) const;
+    const char *TeamName(Team team) const;
 
     Cvars cvars_{};
     MatchState state_ = MatchState::Disabled;
