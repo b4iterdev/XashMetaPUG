@@ -79,8 +79,10 @@ struct Cvars {
     cvar_t readyTime{};
     cvar_t matchRounds{};
     cvar_t halfRounds{};
+    cvar_t firstTo{};
     cvar_t overtimeEnabled{};
     cvar_t overtimeRounds{};
+    cvar_t overtimeFirstTo{};
     cvar_t lo3Enabled{};
     cvar_t pauseTime{};
     cvar_t votePercent{};

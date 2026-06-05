@@ -194,8 +194,10 @@ void Plugin::RegisterCvars()
     RegisterCvar(cvars_.readyTime, "xmp_ready_time", "60");
     RegisterCvar(cvars_.matchRounds, "xmp_match_rounds", "30");
     RegisterCvar(cvars_.halfRounds, "xmp_half_rounds", "15");
+    RegisterCvar(cvars_.firstTo, "xmp_first_to", "0");
     RegisterCvar(cvars_.overtimeEnabled, "xmp_overtime_enabled", "1");
     RegisterCvar(cvars_.overtimeRounds, "xmp_overtime_rounds", "6");
+    RegisterCvar(cvars_.overtimeFirstTo, "xmp_overtime_first_to", "0");
     RegisterCvar(cvars_.lo3Enabled, "xmp_lo3_enabled", "1");
     RegisterCvar(cvars_.pauseTime, "xmp_pause_time", "60");
     RegisterCvar(cvars_.votePercent, "xmp_vote_percent", "0.70");
@@ -488,25 +490,47 @@ void Plugin::HandleRoundScore(Team team, int score)
 void Plugin::EvaluateMatchProgress()
 {
     Log("EvaluateMatchProgress: state=%s, totalRounds=%d, halfRounds=%d, terrorist=%d, ct=%d", StateName(state_), totalRoundCount_, halfRoundCount_, terroristScore_, ctScore_);
-    if (state_ == MatchState::FirstHalf && halfRoundCount_ >= CvarInt(cvars_.halfRounds)) {
-        EnterHalftime();
-        return;
-    }
 
-    if (state_ == MatchState::SecondHalf && totalRoundCount_ >= CvarInt(cvars_.matchRounds)) {
-        if (terroristScore_ == ctScore_ && CvarInt(cvars_.overtimeEnabled) > 0) {
-            EnterOvertime();
-        } else {
+    const int firstTo = CvarInt(cvars_.firstTo);
+    const int overtimeFirstTo = CvarInt(cvars_.overtimeFirstTo);
+
+    if (state_ == MatchState::FirstHalf) {
+        if (firstTo > 0 && (terroristScore_ >= firstTo || ctScore_ >= firstTo)) {
             FinishMatch();
+            return;
         }
-        return;
+        if (halfRoundCount_ >= CvarInt(cvars_.halfRounds)) {
+            EnterHalftime();
+            return;
+        }
     }
 
-    if (state_ == MatchState::Overtime && overtimeRoundCount_ >= CvarInt(cvars_.overtimeRounds)) {
-        if (terroristScore_ == ctScore_) {
-            EnterOvertime();
-        } else {
+    if (state_ == MatchState::SecondHalf) {
+        if (firstTo > 0 && (terroristScore_ >= firstTo || ctScore_ >= firstTo)) {
             FinishMatch();
+            return;
+        }
+        if (totalRoundCount_ >= CvarInt(cvars_.matchRounds)) {
+            if (terroristScore_ == ctScore_ && CvarInt(cvars_.overtimeEnabled) > 0) {
+                EnterOvertime();
+            } else {
+                FinishMatch();
+            }
+            return;
+        }
+    }
+
+    if (state_ == MatchState::Overtime) {
+        if (overtimeFirstTo > 0 && (terroristScore_ >= overtimeFirstTo || ctScore_ >= overtimeFirstTo)) {
+            FinishMatch();
+            return;
+        }
+        if (overtimeRoundCount_ >= CvarInt(cvars_.overtimeRounds)) {
+            if (terroristScore_ == ctScore_) {
+                EnterOvertime();
+            } else {
+                FinishMatch();
+            }
         }
     }
 }
