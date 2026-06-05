@@ -465,7 +465,7 @@ void Plugin::HandleRoundScore(Team team, int score)
             ++overtimeRoundCount_;
         }
         Broadcast("[XMP] Score T %d - CT %d. Round %d/%d.\n", terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
-        UpdateScoreboard();
+        Schedule("update_scoreboard", 0.1f, false, [this]() { UpdateScoreboard(); });
         EvaluateMatchProgress();
     }
 }
