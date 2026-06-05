@@ -408,7 +408,7 @@ void Plugin::SwapTeams()
 
 void Plugin::HandleRoundScore(Team team, int score)
 {
-    if (restarting_) {
+    if (this->restarting_) {
         lastObservedTScore_ = score;
         lastObservedCTScore_ = score;
         return;
@@ -433,7 +433,7 @@ void Plugin::HandleRoundScore(Team team, int score)
     if (team == Team::CounterTerrorist) lastObservedCTScore_ = score;
 
     if (increment) {
-        restarting_ = false;
+        this->restarting_ = false;
         ++halfRoundCount_;
         ++totalRoundCount_;
         if (state_ == MatchState::Overtime) {
