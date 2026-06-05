@@ -403,7 +403,26 @@ void Plugin::UnpauseMatch()
 void Plugin::SwapTeams()
 {
     std::swap(terroristScore_, ctScore_);
+    UpdateScoreboard();
     Broadcast("[XMP] Tracked team scores swapped. Players should switch sides now if automatic team switch is unavailable.\n");
+}
+
+void Plugin::UpdateScoreboard()
+{
+    int msgTeamScore = gpMetaUtilFuncs ? GET_USER_MSG_ID(PLID, "TeamScore", nullptr) : -1;
+    if (msgTeamScore == -1) {
+        msgTeamScore = g_engfuncs.pfnRegUserMsg("TeamScore", -1);
+    }
+
+    auto SendScore = [&](const char *teamName, int score) {
+        g_engfuncs.pfnMessageBegin(MSG_ALL, msgTeamScore, nullptr, nullptr);
+        g_engfuncs.pfnWriteString(teamName);
+        g_engfuncs.pfnWriteShort(score);
+        g_engfuncs.pfnMessageEnd();
+    };
+
+    SendScore("TERRORIST", terroristScore_);
+    SendScore("CT", ctScore_);
 }
 
 void Plugin::HandleRoundScore(Team team, int score)
@@ -440,12 +459,14 @@ void Plugin::HandleRoundScore(Team team, int score)
             ++overtimeRoundCount_;
         }
         Broadcast("[XMP] Score T %d - CT %d. Round %d/%d.\n", terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
+        UpdateScoreboard();
         EvaluateMatchProgress();
     }
 }
 
 void Plugin::EvaluateMatchProgress()
 {
+    Log("EvaluateMatchProgress: state=%s, totalRounds=%d, halfRounds=%d, terrorist=%d, ct=%d", StateName(state_), totalRoundCount_, halfRoundCount_, terroristScore_, ctScore_);
     if (state_ == MatchState::FirstHalf && halfRoundCount_ >= CvarInt(cvars_.halfRounds)) {
         EnterHalftime();
         return;
