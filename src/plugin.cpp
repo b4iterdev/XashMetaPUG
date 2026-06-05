@@ -405,7 +405,7 @@ void Plugin::UnpauseMatch()
     Broadcast("[XMP] Match unpaused.\n");
 }
 
-void xmp::Plugin::SwapTeams()
+void Plugin::SwapTeams()
 {
     this->restarting_ = true;
     for (int i = 1; i <= kMaxClients; ++i) {
@@ -419,7 +419,14 @@ void xmp::Plugin::SwapTeams()
         const int targetTeam = (players_[i].team == Team::Terrorist) ? 2 : 1;
         g_engfuncs.pfnClientCommand(entity, "chooseteam\n");
         g_engfuncs.pfnClientCommand(entity, "jointeam %d\n", targetTeam);
-        Log("SwapTeams: Player %d joined team %d", i, targetTeam);
+
+        int msgTeamInfo = gpMetaUtilFuncs ? GET_USER_MSG_ID(PLID, "TeamInfo", nullptr) : g_engfuncs.pfnRegUserMsg("TeamInfo", -1);
+        g_engfuncs.pfnMessageBegin(MSG_ALL, msgTeamInfo, nullptr, nullptr);
+        g_engfuncs.pfnWriteByte(i);
+        g_engfuncs.pfnWriteString((targetTeam == 2) ? "TERRORIST" : "CT");
+        g_engfuncs.pfnMessageEnd();
+
+        Log("SwapTeams: Player %d forced jointeam %d", i, targetTeam);
     }
 
     std::swap(terroristScore_, ctScore_);
