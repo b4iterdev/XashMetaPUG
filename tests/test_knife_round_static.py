@@ -109,7 +109,7 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("bool IsKnifeRoundState(MatchState state) const", PLUGIN_H)
         self.assertIn("IsKnifeRoundState(state)", PLUGIN_CPP)
 
-    def test_knife_round_strips_pistol_and_re_arms_knife_via_drop_loop(self):
+    def test_knife_round_strips_pistol_once_and_re_arms_knife_after_restart(self):
         self.assertIn("StripKnifeRoundWeapons()", PLUGIN_CPP)
         self.assertIn("StripPlayerWeaponsNative(entity)", PLUGIN_CPP)
         self.assertIn('GiveItemNative(entity, "weapon_knife")', PLUGIN_CPP)
@@ -119,7 +119,8 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("MDLL_Touch", PLUGIN_CPP)
         self.assertIn("MDLL_Use", PLUGIN_CPP)
         self.assertIn("StripKnifeRoundWeapons", PLUGIN_CPP)
-        self.assertIn("Schedule(\"knife_strip\"", PLUGIN_CPP)
+        self.assertIn("Schedule(\"knife_strip\", 1.5f, false", PLUGIN_CPP)
+        self.assertNotIn("Schedule(\"knife_strip\", 0.5f, true", PLUGIN_CPP)
         self.assertLess(
             PLUGIN_CPP.index("EnforceKnifeRoundWeapons()"),
             PLUGIN_CPP.index("StripKnifeRoundWeapons()"),

@@ -426,7 +426,7 @@ void Plugin::StartKnifeRound()
     EnforceKnifeRoundWeapons();
     Broadcast("[XMP] Knife round starting. Winner chooses side with .stay or .swap.\n");
     ServerCommand("sv_restart 1\n");
-    Schedule("knife_strip", 0.5f, true, [this]() { StripKnifeRoundWeapons(); });
+    Schedule("knife_strip", 1.5f, false, [this]() { StripKnifeRoundWeapons(); });
 }
 
 void Plugin::StartLO3(MatchState liveState)
