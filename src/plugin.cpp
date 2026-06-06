@@ -131,7 +131,7 @@ bool Plugin::OnClientCommand(edict_t *entity)
         return false;
     }
 
-    if (strcasecmp(cmd, "jointeam") == 0 && IsSideSwitchBlocked(state_)) {
+    if (strcasecmp(cmd, "jointeam") == 0 && IsSideSwitchBlocked(state_) && !internalTeamSwitch_) {
         Say(entity, "[XMP] Side switching is disabled while LIVE.\n");
         return true;
     }
@@ -657,7 +657,9 @@ void Plugin::SwapTeams()
         AssignRandomModelForTeam(entity, newTeam);
         QueueRandomClassSelection(i, entity, newTeam);
         char joinCommand[] = "jointeam %d\n";
+        internalTeamSwitch_ = true;
         g_engfuncs.pfnClientCommand(entity, joinCommand, targetTeam);
+        internalTeamSwitch_ = false;
         if (targetTeam == 2) ++movedT;
         else ++movedCT;
     }

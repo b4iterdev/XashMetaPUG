@@ -49,8 +49,19 @@ class KnifeRoundStaticTests(unittest.TestCase):
     def test_side_switching_is_blocked_while_live(self):
         self.assertIn("IsLiveState(state_)", PLUGIN_CPP)
         self.assertIn('strcasecmp(cmd, "jointeam") == 0', PLUGIN_CPP)
+        self.assertIn("!internalTeamSwitch_", PLUGIN_CPP)
+        self.assertIn("bool internalTeamSwitch_ = false", PLUGIN_H)
         self.assertIn('normalized == "swap"', PLUGIN_CPP)
         self.assertIn("Side switching is disabled while LIVE", PLUGIN_CPP)
+
+    def test_plugin_driven_swap_bypasses_side_switch_block(self):
+        swap_idx = PLUGIN_CPP.index("void Plugin::SwapTeams()")
+        swap_body = PLUGIN_CPP[swap_idx:swap_idx + 1600]
+        self.assertIn("internalTeamSwitch_ = true", swap_body)
+        self.assertIn("pfnClientCommand(entity, joinCommand, targetTeam)", swap_body)
+        self.assertIn("internalTeamSwitch_ = false", swap_body)
+        self.assertLess(swap_body.index("internalTeamSwitch_ = true"), swap_body.index("pfnClientCommand(entity, joinCommand, targetTeam)"))
+        self.assertLess(swap_body.index("pfnClientCommand(entity, joinCommand, targetTeam)"), swap_body.index("internalTeamSwitch_ = false"))
 
     def test_side_switching_is_blocked_during_knife_and_selection(self):
         self.assertIn("IsSideSwitchBlocked(state_)", PLUGIN_CPP)

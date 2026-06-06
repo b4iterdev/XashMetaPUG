@@ -246,6 +246,7 @@ private:
     bool replayingScoreMessages_ = false;
     bool knifeRoundWeaponsEnforced_ = false;
     bool restoringScores_ = false;
+    bool internalTeamSwitch_ = false;
     Team knifeWinner_ = Team::Unknown;
     int teamScoreMessageId_ = 0;
     int scoreInfoMessageId_ = 0;
