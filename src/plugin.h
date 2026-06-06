@@ -214,6 +214,7 @@ private:
     MatchState state_ = MatchState::Disabled;
     MatchState pendingLiveState_ = MatchState::FirstHalf;
     std::array<PlayerInfo, kMaxClients + 1> players_{};
+    std::array<std::vector<int>, kMaxClients + 1> savedScoreInfo_{};
     std::set<std::string> admins_{};
     std::vector<ScheduledTask> tasks_{};
     int lo3Step_ = 0;

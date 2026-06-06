@@ -500,17 +500,36 @@ void Plugin::FinishLO3()
     RestoreKnifeRoundWeapons();
     SetState(pendingLiveState_);
     if (preservePlayerScores) {
-        ResetLivePlayerLoadout(800);
+        // Save ScoreInfo so we can restore after sv_restart
+        for (int i = 1; i <= kMaxClients; ++i) {
+            savedScoreInfo_[i] = players_[i].scoreInfoValues;
+        }
+        // sv_restart resets positions, inventory, and world state (like a normal LO3)
+        // — mp_startmoney 800 was set by ApplyLiveStateRules, so players spawn with 800
+        ServerCommand("sv_restart 1\n");
+        // Restore team scores and player ScoreInfo after the restart takes effect
+        Schedule("restore_scores", 1.5f, false, [this]() {
+            for (int i = 1; i <= kMaxClients; ++i) {
+                if (!savedScoreInfo_[i].empty()) {
+                    players_[i].scoreInfoValues = savedScoreInfo_[i];
+                }
+                savedScoreInfo_[i].clear();
+            }
+            SyncDisplayedTeamScoresFromMatchScores(true);
+            ReplayAllScoreInfo();
+        });
     } else {
         ServerCommand("sv_restart 3\n");
     }
     ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
-    SyncDisplayedTeamScoresFromMatchScores(true);
-    // Clear ScoreInfo cache so halftime practice kills don't replay on the LIVE scoreboard
-    for (int i = 1; i <= kMaxClients; ++i) {
-        players_[i].scoreInfoValues.clear();
+    if (!preservePlayerScores) {
+        SyncDisplayedTeamScoresFromMatchScores(true);
+        // Clear ScoreInfo cache so halftime practice kills don't replay on the LIVE scoreboard
+        for (int i = 1; i <= kMaxClients; ++i) {
+            players_[i].scoreInfoValues.clear();
+        }
+        ReplayAllScoreInfo();
     }
-    ReplayAllScoreInfo();
     Log("[XMP] LIVE LIVE LIVE!");
 }
 

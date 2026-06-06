@@ -95,10 +95,11 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("lastObservedCTScore_ = 0", PLUGIN_CPP)
         self.assertIn("lastObservedTScore_ = terroristScore_", PLUGIN_CPP)
         self.assertIn("lastObservedCTScore_ = ctScore_", PLUGIN_CPP)
-        self.assertIn("ResetLivePlayerLoadout(800)", PLUGIN_CPP)
         self.assertIn("void ResetLivePlayerLoadout(int money)", PLUGIN_H)
         self.assertIn("SetPlayerMoneyNative(entity, money, false)", PLUGIN_CPP)
         self.assertIn('ServerCommand("mp_startmoney %d\\n", money)', PLUGIN_CPP)
+        self.assertIn('ServerCommand("sv_restart 1\\n")', PLUGIN_CPP)
+        self.assertIn('Schedule("restore_scores"', PLUGIN_CPP)
 
     def test_second_half_lo3_resets_inventory_like_restart_without_restart(self):
         self.assertIn("void ResetLivePlayerInventory(edict_t *entity)", PLUGIN_H)
