@@ -1018,6 +1018,19 @@ void Plugin::EnforceKnifeRoundPlayerNative(edict_t *entity)
     if (!entity || FNullEnt(entity)) {
         return;
     }
+
+    CBasePlayer *player = CBasePlayer::Instance(entity);
+    if (player) {
+        player->m_iKevlar = ARMOR_NONE;
+        player->m_bHasPrimary = false;
+        player->m_bHasC4 = false;
+        player->m_bHasDefuser = false;
+        player->m_bHasNightVision = false;
+        std::fill(std::begin(player->m_rgAmmo), std::end(player->m_rgAmmo), 0);
+        std::fill(std::begin(player->m_rgAmmoLast), std::end(player->m_rgAmmoLast), 0);
+    }
+    entity->v.armorvalue = 0.0f;
+
     SetPlayerMoneyNative(entity, 0, false);
     StripPlayerWeaponsNative(entity);
     GiveItemNative(entity, "weapon_knife");
