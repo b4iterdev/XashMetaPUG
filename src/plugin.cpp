@@ -492,6 +492,10 @@ void Plugin::FinishLO3()
     if (!preservePlayerScores) {
         lastObservedTScore_ = 0;
         lastObservedCTScore_ = 0;
+    } else {
+        // Halftime practice inflated lastObserved*; re-sync to actual match scores
+        lastObservedTScore_ = terroristScore_;
+        lastObservedCTScore_ = ctScore_;
     }
     RestoreKnifeRoundWeapons();
     SetState(pendingLiveState_);
@@ -502,6 +506,10 @@ void Plugin::FinishLO3()
     }
     ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
     SyncDisplayedTeamScoresFromMatchScores(true);
+    // Clear ScoreInfo cache so halftime practice kills don't replay on the LIVE scoreboard
+    for (int i = 1; i <= kMaxClients; ++i) {
+        players_[i].scoreInfoValues.clear();
+    }
     ReplayAllScoreInfo();
     Log("[XMP] LIVE LIVE LIVE!");
 }
