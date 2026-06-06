@@ -87,6 +87,17 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("liveState == MatchState::SecondHalf", PLUGIN_CPP)
         self.assertIn("if (!preservePlayerScores)", PLUGIN_CPP)
 
+    def test_second_half_lo3_preserves_engine_score_baseline_and_resets_money(self):
+        self.assertIn("const bool preservePlayerScores = ShouldPreservePlayerScores(pendingLiveState_)", PLUGIN_CPP)
+        self.assertIn("lastObservedTScore_ = 0", PLUGIN_CPP)
+        self.assertIn("lastObservedCTScore_ = 0", PLUGIN_CPP)
+        self.assertNotIn("lastObservedTScore_ = terroristScore_", PLUGIN_CPP)
+        self.assertNotIn("lastObservedCTScore_ = ctScore_", PLUGIN_CPP)
+        self.assertIn("ResetLivePlayerMoney(800)", PLUGIN_CPP)
+        self.assertIn("void ResetLivePlayerMoney(int money)", PLUGIN_H)
+        self.assertIn("SetPlayerMoneyNative(INDEXENT(i), money, false)", PLUGIN_CPP)
+        self.assertIn('ServerCommand("mp_startmoney %d\\n", money)', PLUGIN_CPP)
+
     def test_knife_round_zeroes_money_and_strips_pistol_without_disabling_buy(self):
         self.assertIn("EnforceKnifeRoundWeapons()", PLUGIN_CPP)
         self.assertIn("RestoreKnifeRoundWeapons()", PLUGIN_CPP)

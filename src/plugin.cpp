@@ -448,11 +448,16 @@ void Plugin::StartLO3(MatchState liveState)
 void Plugin::FinishLO3()
 {
     this->restarting_ = false;
-    lastObservedTScore_ = terroristScore_;
-    lastObservedCTScore_ = ctScore_;
+    const bool preservePlayerScores = ShouldPreservePlayerScores(pendingLiveState_);
+    if (!preservePlayerScores) {
+        lastObservedTScore_ = 0;
+        lastObservedCTScore_ = 0;
+    }
     RestoreKnifeRoundWeapons();
     SetState(pendingLiveState_);
-    if (!ShouldPreservePlayerScores(pendingLiveState_)) {
+    if (preservePlayerScores) {
+        ResetLivePlayerMoney(800);
+    } else {
         ServerCommand("sv_restart 3\n");
     }
     ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
@@ -862,6 +867,19 @@ bool Plugin::SetPlayerMoneyNative(edict_t *entity, int money, bool flash)
         g_engfuncs.pfnMessageEnd();
     }
     return true;
+}
+
+void Plugin::ResetLivePlayerMoney(int money)
+{
+    ServerCommand("mp_startmoney %d\n", money);
+    for (int i = 1; i <= kMaxClients; ++i) {
+        if (!players_[i].connected || FNullEnt(INDEXENT(i))) continue;
+        if (players_[i].team != Team::Terrorist && players_[i].team != Team::CounterTerrorist) {
+            continue;
+        }
+        SetPlayerMoneyNative(INDEXENT(i), money, false);
+    }
+    Log("ResetLivePlayerMoney: applied %d to active players", money);
 }
 
 void Plugin::EnforceKnifeRoundPlayerNative(edict_t *entity)
