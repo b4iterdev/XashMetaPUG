@@ -17,7 +17,7 @@ The implementation plan is tracked at:
 - Knife round before first LIVE with player-selected `.stay` / `.swap` side choice.
 - LO3 flow.
 - Basic match states: warmup, waiting ready, knife round, side selection, first half, halftime, second half, overtime, finished.
-- TeamScore-message based score tracking.
+- TeamScore-message based score tracking and scoreboard display management.
 - Basic admin list.
 - Basic pause/unpause and score commands.
 - Optional "first to N wins" early match end (CS:GO MR12/MR15/MR3-OT semantics).
@@ -120,7 +120,7 @@ Paths containing `..`, spaces, quotes, semicolons, newlines, or paths outside th
 - `!pause` is a minimal timed pause helper using `pausable`; exact behavior must be validated on the target Xash3D server build.
 - Full damage stats are deferred because MatchBot's implementation depends on damage hooks unavailable in Metamod-only mode.
 - Menu/vote systems are deferred; chat commands are the MVP interface.
-- CS 1.6 (Xash3D ARM64) cannot swap the on-screen scoreboard at halftime without ReGameDLL, which is not available for ARM64. The plugin's internal scores stay in sync with the engine's team-entity counts; chat and HUD will agree throughout the match.
+- Team scores shown on the client scoreboard are managed through intercepted/resend `TeamScore` user messages. The plugin keeps its own displayed T/CT score layer and resends those values after halftime, LO3, and score updates.
 
 ## Cvars
 
