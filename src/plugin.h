@@ -171,7 +171,6 @@ private:
     bool SetPlayerMoneyNative(edict_t *entity, int money, bool flash);
     void EnforceKnifeRoundPlayerNative(edict_t *entity);
     bool IsKnifeRoundState(MatchState state) const;
-    bool IsKnifeRoundBlockBuy(MatchState state) const;
 
     bool DispatchCommand(edict_t *entity, const std::string &raw);
     bool DispatchPlayerCommand(edict_t *entity, const std::string &command);

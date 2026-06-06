@@ -87,27 +87,25 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("liveState == MatchState::SecondHalf", PLUGIN_CPP)
         self.assertIn("if (!preservePlayerScores)", PLUGIN_CPP)
 
-    def test_knife_round_disables_buy_money_and_strips_pistol(self):
+    def test_knife_round_zeroes_money_and_strips_pistol_without_disabling_buy(self):
         self.assertIn("EnforceKnifeRoundWeapons()", PLUGIN_CPP)
         self.assertIn("RestoreKnifeRoundWeapons()", PLUGIN_CPP)
-        self.assertIn('"mp_buytime 0\\n"', PLUGIN_CPP)
-        self.assertIn('"sv_buy_status_override 3\\n"', PLUGIN_CPP)
         self.assertIn('"mp_startmoney 0\\n"', PLUGIN_CPP)
         self.assertIn('"mp_maxmoney 0\\n"', PLUGIN_CPP)
-        self.assertIn('"cl_autobuy \\\"\\\"\\n"', PLUGIN_CPP)
-        self.assertIn('"cl_setautobuy \\\"\\\"\\n"', PLUGIN_CPP)
-        self.assertIn('"cl_rebuy \\\"\\\"\\n"', PLUGIN_CPP)
+        self.assertNotIn('"mp_buytime 0\\n"', PLUGIN_CPP)
+        self.assertNotIn('"sv_buy_status_override 3\\n"', PLUGIN_CPP)
+        self.assertNotIn("Buying is disabled during the knife round", PLUGIN_CPP)
 
-    def test_buy_buyequip_rebuy_commands_are_blocked_during_knife_round(self):
-        self.assertIn('"buy"', PLUGIN_CPP)
-        self.assertIn('"buyequip"', PLUGIN_CPP)
-        self.assertIn('"rebuy"', PLUGIN_CPP)
-        self.assertIn('"cl_autobuy"', PLUGIN_CPP)
-        self.assertIn('"cl_setautobuy"', PLUGIN_CPP)
-        self.assertIn('"cl_rebuy"', PLUGIN_CPP)
-        self.assertIn("IsKnifeRoundBlockBuy(state_)", PLUGIN_CPP)
+    def test_buy_buyequip_rebuy_commands_are_not_blocked_during_knife_round(self):
+        self.assertNotIn('"buyequip"', PLUGIN_CPP)
+        self.assertNotIn('"rebuy"', PLUGIN_CPP)
+        self.assertNotIn('"cl_autobuy"', PLUGIN_CPP)
+        self.assertNotIn('"cl_setautobuy"', PLUGIN_CPP)
+        self.assertNotIn('"cl_rebuy"', PLUGIN_CPP)
+        self.assertNotIn("IsKnifeRoundBlockBuy(state_)", PLUGIN_CPP)
+        self.assertNotIn("buy disabled", PLUGIN_CPP)
         self.assertIn("bool IsKnifeRoundState(MatchState state) const", PLUGIN_H)
-        self.assertIn("IsKnifeRoundState(state)", PLUGIN_CPP)
+        self.assertIn("IsKnifeRoundState(state_)", PLUGIN_CPP)
 
     def test_knife_round_strips_pistol_once_and_re_arms_knife_after_restart(self):
         self.assertIn("StripKnifeRoundWeapons()", PLUGIN_CPP)
