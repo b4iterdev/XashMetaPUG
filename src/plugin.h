@@ -151,6 +151,10 @@ private:
     void CacheScoreInfo();
     void SendTeamScore(Team team);
     void SendTeamScoreMessages();
+    void SetDisplayedTeamScore(Team team, int score, bool resend);
+    void SetDisplayedTeamScores(int terroristScore, int ctScore, bool resend);
+    void SyncDisplayedTeamScoresFromMatchScores(bool resend);
+    int DisplayedTeamScore(Team team) const;
     void SendScoreInfo(int index);
     void ReplayAllScoreInfo();
     int TeamScoreMessageId();
@@ -210,6 +214,8 @@ private:
     int overtimeRoundCount_ = 0;
     int terroristScore_ = 0;
     int ctScore_ = 0;
+    int displayedTerroristScore_ = 0;
+    int displayedCTScore_ = 0;
     int overtimeTerroristStartScore_ = 0;
     int overtimeCTStartScore_ = 0;
     int lastObservedTScore_ = 0;

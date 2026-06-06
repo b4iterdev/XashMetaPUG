@@ -295,6 +295,8 @@ void Plugin::ResetMatch(bool keepWarmup)
     overtimeRoundCount_ = 0;
     terroristScore_ = 0;
     ctScore_ = 0;
+    displayedTerroristScore_ = 0;
+    displayedCTScore_ = 0;
     overtimeTerroristStartScore_ = 0;
     overtimeCTStartScore_ = 0;
     lastObservedTScore_ = 0;
@@ -463,7 +465,7 @@ void Plugin::FinishLO3()
         ServerCommand("sv_restart 3\n");
     }
     ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
-    SendTeamScoreMessages();
+    SyncDisplayedTeamScoresFromMatchScores(true);
     ReplayAllScoreInfo();
     Log("[XMP] LIVE LIVE LIVE!");
 }
@@ -535,6 +537,7 @@ void Plugin::SwapSideScores()
 {
     std::swap(terroristScore_, ctScore_);
     std::swap(lastObservedTScore_, lastObservedCTScore_);
+    SyncDisplayedTeamScoresFromMatchScores(false);
 }
 
 bool Plugin::ShouldPreservePlayerScores(MatchState liveState) const
@@ -580,6 +583,7 @@ void Plugin::HandleRoundScore(Team team, int score)
         if (state_ == MatchState::Overtime) {
             ++overtimeRoundCount_;
         }
+        SetDisplayedTeamScore(team, team == Team::Terrorist ? terroristScore_ : ctScore_, true);
         Broadcast("[XMP] Score T %d - CT %d. Round %d/%d.\n", terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
         EvaluateMatchProgress();
     }
@@ -661,7 +665,7 @@ void Plugin::SendTeamScore(Team team)
     replayingScoreMessages_ = true;
     g_engfuncs.pfnMessageBegin(MSG_ALL, messageId, nullptr, nullptr);
     g_engfuncs.pfnWriteString(EngineTeamScoreName(team));
-    g_engfuncs.pfnWriteShort(team == Team::Terrorist ? terroristScore_ : ctScore_);
+    g_engfuncs.pfnWriteShort(DisplayedTeamScore(team));
     g_engfuncs.pfnMessageEnd();
     replayingScoreMessages_ = false;
 }
@@ -670,6 +674,42 @@ void Plugin::SendTeamScoreMessages()
 {
     SendTeamScore(Team::CounterTerrorist);
     SendTeamScore(Team::Terrorist);
+}
+
+void Plugin::SetDisplayedTeamScore(Team team, int score, bool resend)
+{
+    if (team == Team::Terrorist) {
+        displayedTerroristScore_ = score;
+    } else if (team == Team::CounterTerrorist) {
+        displayedCTScore_ = score;
+    } else {
+        return;
+    }
+
+    if (resend) {
+        SendTeamScore(team);
+    }
+}
+
+void Plugin::SetDisplayedTeamScores(int terroristScore, int ctScore, bool resend)
+{
+    displayedTerroristScore_ = terroristScore;
+    displayedCTScore_ = ctScore;
+    if (resend) {
+        SendTeamScoreMessages();
+    }
+}
+
+void Plugin::SyncDisplayedTeamScoresFromMatchScores(bool resend)
+{
+    SetDisplayedTeamScores(terroristScore_, ctScore_, resend);
+}
+
+int Plugin::DisplayedTeamScore(Team team) const
+{
+    if (team == Team::Terrorist) return displayedTerroristScore_;
+    if (team == Team::CounterTerrorist) return displayedCTScore_;
+    return 0;
 }
 
 void Plugin::SendScoreInfo(int index)
@@ -954,6 +994,7 @@ void Plugin::EnterHalftime()
     SetState(MatchState::HalfTime);
     Broadcast("[XMP] Halftime. Score T %d - CT %d. Swap sides and type .ready.\n", terroristScore_, ctScore_);
     SwapSideScores();
+    SyncDisplayedTeamScoresFromMatchScores(true);
     SwapTeams();
     StartReady();
 }

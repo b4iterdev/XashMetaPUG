@@ -64,6 +64,17 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("MRES_SUPERCEDE", (ROOT / "src" / "metamod_api.cpp").read_text())
         self.assertIn("RETURN_META(xmp::GetPlugin().OnMessageEnd() ? MRES_SUPERCEDE : MRES_IGNORED)", (ROOT / "src" / "metamod_api.cpp").read_text())
 
+    def test_scoreboard_display_scores_are_managed_explicitly(self):
+        self.assertIn("displayedTerroristScore_", PLUGIN_H)
+        self.assertIn("displayedCTScore_", PLUGIN_H)
+        self.assertIn("SetDisplayedTeamScore(Team team, int score, bool resend)", PLUGIN_H)
+        self.assertIn("SetDisplayedTeamScores(int terroristScore, int ctScore, bool resend)", PLUGIN_H)
+        self.assertIn("SyncDisplayedTeamScoresFromMatchScores(bool resend)", PLUGIN_H)
+        self.assertIn("DisplayedTeamScore(team)", PLUGIN_CPP)
+        self.assertIn("SetDisplayedTeamScore(team,", PLUGIN_CPP)
+        self.assertIn("SyncDisplayedTeamScoresFromMatchScores(true)", PLUGIN_CPP)
+        self.assertIn("g_engfuncs.pfnWriteShort(DisplayedTeamScore(team))", PLUGIN_CPP)
+
     def test_score_info_is_cached_and_replayed_after_second_half_swap(self):
         self.assertIn("scoreInfoValues", PLUGIN_H)
         self.assertIn("CacheScoreInfo()", PLUGIN_CPP)
