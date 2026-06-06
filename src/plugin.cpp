@@ -108,6 +108,9 @@ void Plugin::OnClientPutInServer(edict_t *entity)
     if (IsPracticeState(state_)) {
         EnforcePracticePlayer(entity);
     }
+    if (IsKnifeRoundState(state_)) {
+        EnforceKnifeRoundPlayerNative(entity);
+    }
     if (state_ == MatchState::WaitingReady || state_ == MatchState::HalfTime) {
         Say(entity, "[XMP] Type .ready when ready.\n");
     }
@@ -360,12 +363,19 @@ bool Plugin::ExecuteConfigFile(const std::string &path)
 
 void Plugin::ApplyStateRules(MatchState state)
 {
+    CancelTask("practice_enforce");
+    CancelTask("knife_enforce");
+
     if (IsPracticeState(state)) {
         ApplyPracticeStateRules();
         return;
     }
 
-    CancelTask("practice_enforce");
+    if (IsKnifeRoundState(state)) {
+        ApplyKnifeRoundStateRules();
+        return;
+    }
+
     if (state == MatchState::StartingLO3 || IsLiveState(state)) {
         ApplyLiveStateRules();
     }
@@ -380,6 +390,25 @@ void Plugin::ApplyPracticeStateRules()
     ServerCommand("mp_give_player_c4 0\n");
     EnforcePracticeStatePlayers();
     Schedule("practice_enforce", 1.0f, true, [this]() { EnforcePracticeStatePlayers(); });
+}
+
+void Plugin::ApplyKnifeRoundStateRules()
+{
+    // Knife round must NOT auto-respawn dead players; otherwise the engine re-gives
+    // the default pistol on every spawn and defeats the knife-only enforcement.
+    ServerCommand("mp_forcerespawn 0\n");
+    ServerCommand("mp_roundtime 60\n");
+    ServerCommand("mp_startmoney 0\n");
+    ServerCommand("mp_maxmoney 0\n");
+    ServerCommand("mp_give_player_c4 0\n");
+    EnforceKnifeRoundWeapons();
+    // Periodic re-enforce: if the engine re-spawns a player via round restart or
+    // any other path, strip the re-given pistol before the player can use it.
+    Schedule("knife_enforce", 1.0f, true, [this]() {
+        if (IsKnifeRoundState(state_)) {
+            EnforceKnifeRoundWeapons();
+        }
+    });
 }
 
 void Plugin::ApplyLiveStateRules()
@@ -1156,9 +1185,10 @@ void Plugin::RestoreKnifeRoundWeapons()
     }
     knifeRoundWeaponsEnforced_ = false;
     CancelTask("knife_strip");
+    CancelTask("knife_enforce");
     ServerCommand("mp_startmoney 800\n");
     ServerCommand("mp_maxmoney 16000\n");
-    Log("RestoreKnifeRoundWeapons: money defaults restored, knife_strip task cancelled");
+    Log("RestoreKnifeRoundWeapons: money defaults restored, knife_strip and knife_enforce tasks cancelled");
 }
 
 void Plugin::EvaluateMatchProgress()

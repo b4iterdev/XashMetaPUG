@@ -127,6 +127,7 @@ private:
     void ExecuteStateConfig(MatchState state);
     void ApplyStateRules(MatchState state);
     void ApplyPracticeStateRules();
+    void ApplyKnifeRoundStateRules();
     void ApplyLiveStateRules();
     bool ExecuteConfigFile(const std::string &path);
     bool IsSafeConfigPath(const std::string &path) const;

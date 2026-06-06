@@ -235,6 +235,20 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("player->m_iDeaths = savedScoreInfo_[i][2]", PLUGIN_CPP)
         self.assertIn("liveState == MatchState::SecondHalf", PLUGIN_CPP)
 
+    def test_knife_round_disables_forcerespawn_and_periodically_re_enforces(self):
+        self.assertIn("void ApplyKnifeRoundStateRules()", PLUGIN_H)
+        self.assertIn("ApplyKnifeRoundStateRules()", PLUGIN_CPP)
+        self.assertIn("IsKnifeRoundState(state)", PLUGIN_CPP)
+        self.assertIn("CancelTask(\"knife_enforce\")", PLUGIN_CPP)
+        self.assertIn('Schedule("knife_enforce", 1.0f, true', PLUGIN_CPP)
+        self.assertIn("mp_forcerespawn 0", PLUGIN_CPP)
+        self.assertIn('CancelTask("knife_enforce")', PLUGIN_CPP.split("ApplyKnifeRoundStateRules")[0])
+        self.assertIn("EnforceKnifeRoundPlayerNative(entity)", PLUGIN_CPP)
+        on_client_idx = PLUGIN_CPP.index("OnClientPutInServer(edict_t *entity)")
+        on_client_body = PLUGIN_CPP[on_client_idx:on_client_idx + 600]
+        self.assertIn("IsKnifeRoundState(state_)", on_client_body)
+        self.assertIn("EnforceKnifeRoundPlayerNative(entity)", on_client_body)
+
 
 if __name__ == "__main__":
     unittest.main()
