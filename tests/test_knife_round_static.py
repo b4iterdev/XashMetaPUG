@@ -22,7 +22,12 @@ class KnifeRoundStaticTests(unittest.TestCase):
     def test_knife_round_score_sets_winner_without_match_score_increment(self):
         self.assertIn("HandleKnifeRoundScore(team, score)", PLUGIN_CPP)
         self.assertIn("knifeWinner_ = winningTeam", PLUGIN_CPP)
+        self.assertIn('Schedule("knife_winner_transition", 0.0f, false', PLUGIN_CPP)
         self.assertIn("SetState(MatchState::SideSelection)", PLUGIN_CPP)
+        self.assertLess(
+            PLUGIN_CPP.index('Schedule("knife_winner_transition", 0.0f, false'),
+            PLUGIN_CPP.index("SetState(MatchState::SideSelection)"),
+        )
 
     def test_winning_players_choose_stay_or_swap(self):
         self.assertIn('normalized == "stay"', PLUGIN_CPP)
@@ -149,6 +154,7 @@ class KnifeRoundStaticTests(unittest.TestCase):
 
     def test_knife_round_zeroes_money_and_strips_pistol_without_disabling_buy(self):
         self.assertIn("EnforceKnifeRoundWeapons()", PLUGIN_CPP)
+        self.assertIn("void EnforceKnifeRoundWeapons(bool announce = true)", PLUGIN_H)
         self.assertIn("RestoreKnifeRoundWeapons()", PLUGIN_CPP)
         self.assertIn('"mp_startmoney 0\\n"', PLUGIN_CPP)
         self.assertIn('"mp_maxmoney 0\\n"', PLUGIN_CPP)
@@ -165,7 +171,7 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertNotIn("IsKnifeRoundBlockBuy(state_)", PLUGIN_CPP)
         self.assertNotIn("buy disabled", PLUGIN_CPP)
         self.assertIn("bool IsKnifeRoundState(MatchState state) const", PLUGIN_H)
-        self.assertIn("IsKnifeRoundState(state_)", PLUGIN_CPP)
+        self.assertIn("state_ == MatchState::KnifeRound", PLUGIN_CPP)
 
     def test_knife_round_strips_pistol_once_and_re_arms_knife_after_restart(self):
         self.assertIn("StripKnifeRoundWeapons()", PLUGIN_CPP)
@@ -183,6 +189,16 @@ class KnifeRoundStaticTests(unittest.TestCase):
             PLUGIN_CPP.index("EnforceKnifeRoundWeapons()"),
             PLUGIN_CPP.index("StripKnifeRoundWeapons()"),
         )
+
+    def test_knife_round_winner_stops_knife_enforcement_before_side_selection(self):
+        self.assertIn("RestoreKnifeRoundWeapons()", PLUGIN_CPP)
+        self.assertIn('Schedule("knife_winner_transition", 0.0f, false', PLUGIN_CPP)
+        winner_idx = PLUGIN_CPP.index("void Plugin::HandleKnifeRoundScore")
+        winner_body = PLUGIN_CPP[winner_idx:winner_idx + 1600]
+        self.assertIn("RestoreKnifeRoundWeapons()", winner_body)
+        self.assertIn('Schedule("knife_winner_transition", 0.0f, false', winner_body)
+        self.assertIn("SetState(MatchState::SideSelection)", winner_body)
+        self.assertLess(winner_body.index("RestoreKnifeRoundWeapons()"), winner_body.index("SetState(MatchState::SideSelection)"))
 
     def test_knife_round_weapon_state_is_restored_when_match_resets(self):
         self.assertIn("RestoreKnifeRoundWeapons()", PLUGIN_CPP)
@@ -247,18 +263,19 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("player->m_iDeaths = savedScoreInfo_[i][2]", PLUGIN_CPP)
         self.assertIn("liveState == MatchState::SecondHalf", PLUGIN_CPP)
 
-    def test_knife_round_disables_forcerespawn_and_periodically_re_enforces(self):
+    def test_knife_round_disables_forcerespawn_without_periodic_knife_spam(self):
         self.assertIn("void ApplyKnifeRoundStateRules()", PLUGIN_H)
         self.assertIn("ApplyKnifeRoundStateRules()", PLUGIN_CPP)
-        self.assertIn("IsKnifeRoundState(state)", PLUGIN_CPP)
-        self.assertIn("CancelTask(\"knife_enforce\")", PLUGIN_CPP)
-        self.assertIn('Schedule("knife_enforce", 1.0f, true', PLUGIN_CPP)
+        self.assertIn("state == MatchState::KnifeRound", PLUGIN_CPP)
+        self.assertIn("state_ == MatchState::KnifeRound", PLUGIN_CPP)
+        self.assertIn("knifeRoundWeaponsEnforced_ = true", PLUGIN_CPP)
         self.assertIn("mp_forcerespawn 0", PLUGIN_CPP)
-        self.assertIn('CancelTask("knife_enforce")', PLUGIN_CPP.split("ApplyKnifeRoundStateRules")[0])
+        self.assertNotIn("knife_enforce", PLUGIN_CPP)
+        self.assertNotIn("EnforceKnifeRoundWeapons(false)", PLUGIN_CPP)
         self.assertIn("EnforceKnifeRoundPlayerNative(entity)", PLUGIN_CPP)
         on_client_idx = PLUGIN_CPP.index("OnClientPutInServer(edict_t *entity)")
         on_client_body = PLUGIN_CPP[on_client_idx:on_client_idx + 600]
-        self.assertIn("IsKnifeRoundState(state_)", on_client_body)
+        self.assertIn("state_ == MatchState::KnifeRound", on_client_body)
         self.assertIn("EnforceKnifeRoundPlayerNative(entity)", on_client_body)
 
 

@@ -108,7 +108,7 @@ void Plugin::OnClientPutInServer(edict_t *entity)
     if (IsPracticeState(state_)) {
         EnforcePracticePlayer(entity);
     }
-    if (IsKnifeRoundState(state_)) {
+    if (state_ == MatchState::KnifeRound) {
         EnforceKnifeRoundPlayerNative(entity);
     }
     if (state_ == MatchState::WaitingReady || state_ == MatchState::HalfTime) {
@@ -368,14 +368,13 @@ bool Plugin::ExecuteConfigFile(const std::string &path)
 void Plugin::ApplyStateRules(MatchState state)
 {
     CancelTask("practice_enforce");
-    CancelTask("knife_enforce");
 
     if (IsPracticeState(state)) {
         ApplyPracticeStateRules();
         return;
     }
 
-    if (IsKnifeRoundState(state)) {
+    if (state == MatchState::KnifeRound) {
         ApplyKnifeRoundStateRules();
         return;
     }
@@ -405,14 +404,7 @@ void Plugin::ApplyKnifeRoundStateRules()
     ServerCommand("mp_startmoney 0\n");
     ServerCommand("mp_maxmoney 0\n");
     ServerCommand("mp_give_player_c4 0\n");
-    EnforceKnifeRoundWeapons();
-    // Periodic re-enforce: if the engine re-spawns a player via round restart or
-    // any other path, strip the re-given pistol before the player can use it.
-    Schedule("knife_enforce", 1.0f, true, [this]() {
-        if (IsKnifeRoundState(state_)) {
-            EnforceKnifeRoundWeapons();
-        }
-    });
+    knifeRoundWeaponsEnforced_ = true;
 }
 
 void Plugin::ApplyLiveStateRules()
@@ -826,8 +818,11 @@ void Plugin::HandleKnifeRoundScore(Team team, int score)
     knifeRoundCompleted_ = true;
     sideSelectionPending_ = true;
     restarting_ = false;
-    SetState(MatchState::SideSelection);
-    Broadcast("[XMP] Knife round winner: %s. Winning players type .stay or .swap.\n", TeamName(knifeWinner_));
+    RestoreKnifeRoundWeapons();
+    Schedule("knife_winner_transition", 0.0f, false, [this]() {
+        SetState(MatchState::SideSelection);
+        Broadcast("[XMP] Knife round winner: %s. Winning players type .stay or .swap.\n", TeamName(knifeWinner_));
+    });
 }
 
 void Plugin::HandleSideSelection(edict_t *entity, bool swapSides)
@@ -998,7 +993,7 @@ bool Plugin::IsKnifeRoundState(MatchState state) const
     return state == MatchState::KnifeRound || state == MatchState::SideSelection;
 }
 
-void Plugin::EnforceKnifeRoundWeapons()
+void Plugin::EnforceKnifeRoundWeapons(bool announce)
 {
     knifeRoundWeaponsEnforced_ = true;
     ServerCommand("mp_startmoney 0\n");
@@ -1007,8 +1002,10 @@ void Plugin::EnforceKnifeRoundWeapons()
         if (!players_[i].connected || FNullEnt(INDEXENT(i))) continue;
         EnforceKnifeRoundPlayerNative(INDEXENT(i));
     }
-    Broadcast("[XMP] Knife-only mode: money locked and pistols stripped.\n");
-    Log("EnforceKnifeRoundWeapons: money stripped and knife-only inventory applied for all players");
+    if (announce) {
+        Broadcast("[XMP] Knife-only mode: money locked and pistols stripped.\n");
+        Log("EnforceKnifeRoundWeapons: money stripped and knife-only inventory applied for all players");
+    }
 }
 
 edict_t *Plugin::CreateNamedEntity(const char *classname) const
@@ -1214,7 +1211,7 @@ void Plugin::EnforceKnifeRoundPlayerNative(edict_t *entity)
 
 void Plugin::StripKnifeRoundWeapons()
 {
-    if (!knifeRoundWeaponsEnforced_ || !IsKnifeRoundState(state_)) {
+    if (!knifeRoundWeaponsEnforced_ || state_ != MatchState::KnifeRound) {
         CancelTask("knife_strip");
         return;
     }
@@ -1235,10 +1232,9 @@ void Plugin::RestoreKnifeRoundWeapons()
     }
     knifeRoundWeaponsEnforced_ = false;
     CancelTask("knife_strip");
-    CancelTask("knife_enforce");
     ServerCommand("mp_startmoney 800\n");
     ServerCommand("mp_maxmoney 16000\n");
-    Log("RestoreKnifeRoundWeapons: money defaults restored, knife_strip and knife_enforce tasks cancelled");
+    Log("RestoreKnifeRoundWeapons: money defaults restored, knife_strip task cancelled");
 }
 
 void Plugin::EvaluateMatchProgress()

@@ -173,7 +173,7 @@ private:
     int MoneyMessageId();
     const char *EngineTeamScoreName(Team team) const;
     int TeamNumber(Team team) const;
-    void EnforceKnifeRoundWeapons();
+    void EnforceKnifeRoundWeapons(bool announce = true);
     void StripKnifeRoundWeapons();
     void RestoreKnifeRoundWeapons();
     edict_t *CreateNamedEntity(const char *classname) const;
