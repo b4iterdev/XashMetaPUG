@@ -167,7 +167,24 @@ bool Plugin::OnMessageBegin(int destination, int type, const float *origin, edic
 
 bool Plugin::OnWriteByte(int value) { message_.numbers.push_back(value); return suppressCurrentMessage_; }
 bool Plugin::OnWriteChar(int value) { message_.numbers.push_back(value); return suppressCurrentMessage_; }
-bool Plugin::OnWriteShort(int value) { message_.numbers.push_back(value); return suppressCurrentMessage_; }
+bool Plugin::OnWriteShort(int value) {
+    // During the 2nd-half LO3 ScoreInfo restore window, rewrite frags and deaths
+    // with the pre-restart values so engine-driven ScoreInfo(0,0) after sv_restart
+    // does not overwrite the preserved 1st-half score on the client scoreboard.
+    if (message_.name == "ScoreInfo" && restoringScores_ && !message_.numbers.empty()) {
+        const int index = message_.numbers[0];
+        if (IsConnectedPlayerIndex(index) && !savedScoreInfo_[index].empty()) {
+            // size==1 -> about to write frags; size==2 -> about to write deaths
+            if (message_.numbers.size() == 1 && savedScoreInfo_[index].size() >= 2) {
+                value = savedScoreInfo_[index][1];
+            } else if (message_.numbers.size() == 2 && savedScoreInfo_[index].size() >= 3) {
+                value = savedScoreInfo_[index][2];
+            }
+        }
+    }
+    message_.numbers.push_back(value);
+    return suppressCurrentMessage_;
+}
 bool Plugin::OnWriteLong(int value) { message_.numbers.push_back(value); return suppressCurrentMessage_; }
 bool Plugin::OnWriteString(const char *value) {
     message_.strings.emplace_back(value ? value : "");
@@ -508,16 +525,39 @@ void Plugin::FinishLO3()
         // sv_restart resets positions, inventory, and world state (like a normal LO3)
         // — mp_startmoney 800 was set by ApplyLiveStateRules, so players spawn with 800
         ServerCommand("sv_restart 1\n");
-        // Restore team scores and player ScoreInfo after the restart takes effect
+        // Restore team scores and player ScoreInfo after the restart takes effect.
+        // We open a 5s window during which the engine's ScoreInfo(0,0) frags/deaths
+        // are rewritten with the pre-restart values, then pev->frags/m_iDeaths are
+        // restored so any later engine messages also use the preserved scores.
         Schedule("restore_scores", 1.5f, false, [this]() {
             for (int i = 1; i <= kMaxClients; ++i) {
                 if (!savedScoreInfo_[i].empty()) {
                     players_[i].scoreInfoValues = savedScoreInfo_[i];
                 }
-                savedScoreInfo_[i].clear();
             }
+            // Restore server-side frags/deaths so the engine's later ScoreInfo
+            // messages use the preserved 1st-half values, not 0/0.
+            for (int i = 1; i <= kMaxClients; ++i) {
+                if (!savedScoreInfo_[i].empty() && savedScoreInfo_[i].size() >= 3) {
+                    edict_t *entity = INDEXENT(i);
+                    if (!FNullEnt(entity) && players_[i].connected) {
+                        entity->v.frags = static_cast<float>(savedScoreInfo_[i][1]);
+                        CBasePlayer *player = CBasePlayer::Instance(entity);
+                        if (player) {
+                            player->m_iDeaths = savedScoreInfo_[i][2];
+                        }
+                    }
+                }
+            }
+            restoringScores_ = true;
             SyncDisplayedTeamScoresFromMatchScores(true);
             ReplayAllScoreInfo();
+            Schedule("stop_restoring_scores", 5.0f, false, [this]() {
+                restoringScores_ = false;
+                for (int i = 1; i <= kMaxClients; ++i) {
+                    savedScoreInfo_[i].clear();
+                }
+            });
         });
     } else {
         ServerCommand("sv_restart 3\n");

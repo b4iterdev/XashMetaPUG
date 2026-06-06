@@ -222,6 +222,19 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("player->m_iModelName = kCTModels[std::rand() % count]", PLUGIN_CPP)
         self.assertIn("std::srand(static_cast<unsigned>(std::time(nullptr)))", PLUGIN_CPP)
 
+    def test_second_half_lo3_restores_player_scores_across_sv_restart(self):
+        self.assertIn("restoringScores_", PLUGIN_H)
+        self.assertIn("Schedule(\"restore_scores\", 1.5f, false", PLUGIN_CPP)
+        self.assertIn("restoringScores_ = true", PLUGIN_CPP)
+        self.assertIn('Schedule("stop_restoring_scores", 5.0f, false', PLUGIN_CPP)
+        self.assertIn("restoringScores_ = false", PLUGIN_CPP)
+        self.assertIn("message_.name == \"ScoreInfo\" && restoringScores_", PLUGIN_CPP)
+        self.assertIn("savedScoreInfo_[index][1]", PLUGIN_CPP)
+        self.assertIn("savedScoreInfo_[index][2]", PLUGIN_CPP)
+        self.assertIn("entity->v.frags = static_cast<float>(savedScoreInfo_[i][1])", PLUGIN_CPP)
+        self.assertIn("player->m_iDeaths = savedScoreInfo_[i][2]", PLUGIN_CPP)
+        self.assertIn("liveState == MatchState::SecondHalf", PLUGIN_CPP)
+
 
 if __name__ == "__main__":
     unittest.main()
