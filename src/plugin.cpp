@@ -104,6 +104,9 @@ void Plugin::OnClientPutInServer(edict_t *entity)
 {
     Log("OnClientPutInServer: entity=%p, index=%d", entity, PlayerIndex(entity));
     UpdatePlayer(entity);
+    if (IsPracticeState(state_)) {
+        EnforcePracticePlayer(entity);
+    }
     if (state_ == MatchState::WaitingReady || state_ == MatchState::HalfTime) {
         Say(entity, "[XMP] Type .ready when ready.\n");
     }
@@ -306,6 +309,7 @@ void Plugin::SetState(MatchState next)
     state_ = next;
     Broadcast("[XMP] State: %s\n", StateName(state_));
     ExecuteStateConfig(state_);
+    ApplyStateRules(state_);
 }
 
 void Plugin::ExecuteStateConfig(MatchState state)
@@ -334,6 +338,41 @@ bool Plugin::ExecuteConfigFile(const std::string &path)
 
     ServerCommand("exec %s\n", path.c_str());
     return true;
+}
+
+void Plugin::ApplyStateRules(MatchState state)
+{
+    if (IsPracticeState(state)) {
+        ApplyPracticeStateRules();
+        return;
+    }
+
+    CancelTask("practice_enforce");
+    if (state == MatchState::StartingLO3 || IsLiveState(state)) {
+        ApplyLiveStateRules();
+    }
+}
+
+void Plugin::ApplyPracticeStateRules()
+{
+    ServerCommand("mp_forcerespawn 1\n");
+    ServerCommand("mp_roundtime 60\n");
+    ServerCommand("mp_startmoney 16000\n");
+    ServerCommand("mp_maxmoney 16000\n");
+    ServerCommand("mp_give_player_c4 0\n");
+    EnforcePracticeStatePlayers();
+    Schedule("practice_enforce", 1.0f, true, [this]() { EnforcePracticeStatePlayers(); });
+}
+
+void Plugin::ApplyLiveStateRules()
+{
+    ServerCommand("mp_forcerespawn 0\n");
+    ServerCommand("mp_roundtime 1.75\n");
+    ServerCommand("mp_startmoney 800\n");
+    ServerCommand("mp_maxmoney 16000\n");
+    ServerCommand("mp_give_player_c4 1\n");
+    ServerCommand("mp_c4timer 35\n");
+    ServerCommand("mp_freezetime 15\n");
 }
 
 bool Plugin::IsSafeConfigPath(const std::string &path) const
@@ -426,6 +465,7 @@ void Plugin::StartLO3(MatchState liveState)
     lo3Step_ = 0;
     const bool preservePlayerScores = ShouldPreservePlayerScores(liveState);
     SetState(MatchState::StartingLO3);
+    ApplyLiveStateRules();
     if (CvarInt(cvars_.lo3Enabled) <= 0) {
         FinishLO3();
         return;
@@ -869,6 +909,63 @@ bool Plugin::SetPlayerMoneyNative(edict_t *entity, int money, bool flash)
     return true;
 }
 
+bool Plugin::RemovePlayerC4Native(edict_t *entity) const
+{
+    if (!entity || FNullEnt(entity)) {
+        return false;
+    }
+
+    CBasePlayer *player = CBasePlayer::Instance(entity);
+    if (!player) {
+        return false;
+    }
+
+    bool removed = false;
+    player->m_bHasC4 = false;
+    entity->v.weapons &= ~(1 << WEAPON_C4);
+    player->ForEachItem([&](CBasePlayerItem *item) {
+        if (!item || item->m_iId != WEAPON_C4) {
+            return false;
+        }
+        player->RemovePlayerItem(item);
+        item->Kill();
+        removed = true;
+        return true;
+    });
+    return removed;
+}
+
+void Plugin::EnforcePracticePlayer(edict_t *entity)
+{
+    if (!entity || FNullEnt(entity)) {
+        return;
+    }
+
+    const int index = PlayerIndex(entity);
+    if (!IsConnectedPlayerIndex(index)) {
+        return;
+    }
+    if (players_[index].team != Team::Terrorist && players_[index].team != Team::CounterTerrorist) {
+        return;
+    }
+
+    SetPlayerMoneyNative(entity, 16000, false);
+    RemovePlayerC4Native(entity);
+}
+
+void Plugin::EnforcePracticeStatePlayers()
+{
+    if (!IsPracticeState(state_)) {
+        CancelTask("practice_enforce");
+        return;
+    }
+
+    for (int i = 1; i <= kMaxClients; ++i) {
+        if (!players_[i].connected || FNullEnt(INDEXENT(i))) continue;
+        EnforcePracticePlayer(INDEXENT(i));
+    }
+}
+
 void Plugin::ResetLivePlayerLoadout(int money)
 {
     ServerCommand("mp_startmoney %d\n", money);
@@ -1115,6 +1212,11 @@ bool Plugin::IsAdmin(edict_t *entity) const
 bool Plugin::IsLiveState(MatchState state) const
 {
     return state == MatchState::FirstHalf || state == MatchState::SecondHalf || state == MatchState::Overtime;
+}
+
+bool Plugin::IsPracticeState(MatchState state) const
+{
+    return state == MatchState::Warmup || state == MatchState::HalfTime;
 }
 
 bool Plugin::IsSideSwitchBlocked(MatchState state) const

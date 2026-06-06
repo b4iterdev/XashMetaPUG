@@ -124,6 +124,9 @@ private:
     void ResetMatch(bool keepWarmup);
     void SetState(MatchState next);
     void ExecuteStateConfig(MatchState state);
+    void ApplyStateRules(MatchState state);
+    void ApplyPracticeStateRules();
+    void ApplyLiveStateRules();
     bool ExecuteConfigFile(const std::string &path);
     bool IsSafeConfigPath(const std::string &path) const;
     void StartReady();
@@ -169,6 +172,9 @@ private:
     bool StripPlayerWeaponsNative(edict_t *entity) const;
     bool GiveItemNative(edict_t *entity, const char *classname) const;
     bool SetPlayerMoneyNative(edict_t *entity, int money, bool flash);
+    bool RemovePlayerC4Native(edict_t *entity) const;
+    void EnforcePracticePlayer(edict_t *entity);
+    void EnforcePracticeStatePlayers();
     void ResetLivePlayerLoadout(int money);
     void ResetLivePlayerInventory(edict_t *entity);
     void EnforceKnifeRoundPlayerNative(edict_t *entity);
@@ -179,6 +185,7 @@ private:
     bool DispatchAdminCommand(edict_t *entity, const std::string &command);
     bool IsAdmin(edict_t *entity) const;
     bool IsLiveState(MatchState state) const;
+    bool IsPracticeState(MatchState state) const;
     bool IsSideSwitchBlocked(MatchState state) const;
     bool IsConnectedPlayerIndex(int index) const;
     int PlayerIndex(edict_t *entity) const;

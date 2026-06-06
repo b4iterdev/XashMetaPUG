@@ -5,6 +5,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_H = (ROOT / "src" / "plugin.h").read_text()
 PLUGIN_CPP = (ROOT / "src" / "plugin.cpp").read_text()
+WARMUP_CFG = (ROOT / "cstrike" / "addons" / "xashmetapug" / "cfg" / "warmup.cfg").read_text()
+HALFTIME_CFG = (ROOT / "cstrike" / "addons" / "xashmetapug" / "cfg" / "halftime.cfg").read_text()
 
 
 class KnifeRoundStaticTests(unittest.TestCase):
@@ -111,6 +113,38 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn('GiveItemNative(entity, "weapon_knife")', PLUGIN_CPP)
         self.assertIn('GiveItemNative(entity, "weapon_glock18")', PLUGIN_CPP)
         self.assertIn('GiveItemNative(entity, "weapon_usp")', PLUGIN_CPP)
+
+    def test_warmup_and_halftime_practice_rules_are_enforced(self):
+        self.assertIn("ApplyPracticeStateRules()", PLUGIN_CPP)
+        self.assertIn("IsPracticeState(state)", PLUGIN_CPP)
+        self.assertIn("state == MatchState::Warmup || state == MatchState::HalfTime", PLUGIN_CPP)
+        self.assertIn('ServerCommand("mp_forcerespawn 1\\n")', PLUGIN_CPP)
+        self.assertIn('ServerCommand("mp_roundtime 60\\n")', PLUGIN_CPP)
+        self.assertIn('ServerCommand("mp_startmoney 16000\\n")', PLUGIN_CPP)
+        self.assertIn('ServerCommand("mp_give_player_c4 0\\n")', PLUGIN_CPP)
+        self.assertIn('Schedule("practice_enforce", 1.0f, true', PLUGIN_CPP)
+        self.assertIn("EnforcePracticePlayer(entity)", PLUGIN_CPP)
+        self.assertIn("SetPlayerMoneyNative(entity, 16000, false)", PLUGIN_CPP)
+        self.assertIn("RemovePlayerC4Native(entity)", PLUGIN_CPP)
+        self.assertIn("player->m_bHasC4 = false", PLUGIN_CPP)
+        self.assertIn("entity->v.weapons &= ~(1 << WEAPON_C4)", PLUGIN_CPP)
+
+    def test_lo3_and_live_rules_restore_match_cvars(self):
+        self.assertIn("ApplyLiveStateRules()", PLUGIN_CPP)
+        self.assertIn('ServerCommand("mp_forcerespawn 0\\n")', PLUGIN_CPP)
+        self.assertIn('ServerCommand("mp_roundtime 1.75\\n")', PLUGIN_CPP)
+        self.assertIn('ServerCommand("mp_startmoney 800\\n")', PLUGIN_CPP)
+        self.assertIn('ServerCommand("mp_give_player_c4 1\\n")', PLUGIN_CPP)
+        self.assertIn('ServerCommand("mp_c4timer 35\\n")', PLUGIN_CPP)
+        self.assertIn('CancelTask("practice_enforce")', PLUGIN_CPP)
+
+    def test_practice_state_configs_match_enforced_values(self):
+        for config in (WARMUP_CFG, HALFTIME_CFG):
+            self.assertIn("mp_forcerespawn 1", config)
+            self.assertIn("mp_roundtime 60", config)
+            self.assertIn("mp_startmoney 16000", config)
+            self.assertIn("mp_maxmoney 16000", config)
+            self.assertIn("mp_give_player_c4 0", config)
 
     def test_knife_round_zeroes_money_and_strips_pistol_without_disabling_buy(self):
         self.assertIn("EnforceKnifeRoundWeapons()", PLUGIN_CPP)
