@@ -59,6 +59,7 @@ struct PlayerInfo {
     bool ready = false;
     bool admin = false;
     int userId = 0;
+    int pendingClassSlot = 0;
     Team team = Team::Unknown;
     std::vector<int> scoreInfoValues;
     std::string authId;
@@ -143,6 +144,10 @@ private:
     void UnpauseMatch();
     void SwapTeams();
     void AssignRandomModelForTeam(edict_t *entity, Team team);
+    int RandomClassSlotForTeam(Team team) const;
+    void QueueRandomClassSelection(int index, edict_t *entity, Team team);
+    void ForcePendingClassSelection(int index);
+    void ClearPendingClassSelection(int index);
     void SwapSideScores();
     bool ShouldPreservePlayerScores(MatchState liveState) const;
     void HandleRoundScore(Team team, int score);

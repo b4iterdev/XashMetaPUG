@@ -205,7 +205,12 @@ class KnifeRoundStaticTests(unittest.TestCase):
 
     def test_swap_teams_preassigns_random_model_to_skip_class_menu(self):
         self.assertIn("AssignRandomModelForTeam(entity, newTeam)", PLUGIN_CPP)
+        self.assertIn("QueueRandomClassSelection(i, entity, newTeam)", PLUGIN_CPP)
         self.assertIn("void AssignRandomModelForTeam(edict_t *entity, Team team)", PLUGIN_H)
+        self.assertIn("void QueueRandomClassSelection(int index, edict_t *entity, Team team)", PLUGIN_H)
+        self.assertIn("void ForcePendingClassSelection(int index)", PLUGIN_H)
+        self.assertIn("void ClearPendingClassSelection(int index)", PLUGIN_H)
+        self.assertIn("int pendingClassSlot = 0", PLUGIN_H)
         self.assertIn("static constexpr ModelName kTModels[]", PLUGIN_CPP)
         self.assertIn("static constexpr ModelName kCTModels[]", PLUGIN_CPP)
         self.assertIn("MODEL_URBAN", PLUGIN_CPP)
@@ -221,6 +226,13 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("player->m_iModelName = kTModels[std::rand() % count]", PLUGIN_CPP)
         self.assertIn("player->m_iModelName = kCTModels[std::rand() % count]", PLUGIN_CPP)
         self.assertIn("std::srand(static_cast<unsigned>(std::time(nullptr)))", PLUGIN_CPP)
+        self.assertIn('char classCommand[] = "joinclass %d\\n"', PLUGIN_CPP)
+        self.assertIn("pendingClassSlot", PLUGIN_CPP)
+        self.assertIn('message_.name == "VGUIMenu" || message_.name == "ShowMenu"', PLUGIN_CPP)
+        self.assertIn('Schedule(Format("force_class_%d_a", index), 0.1f, false', PLUGIN_CPP)
+        self.assertIn('Schedule(Format("force_class_%d_b", index), 0.5f, false', PLUGIN_CPP)
+        self.assertIn('Schedule(Format("force_class_%d_c", index), 1.0f, false', PLUGIN_CPP)
+        self.assertIn('Schedule(Format("clear_class_%d", index), 2.0f, false', PLUGIN_CPP)
 
     def test_second_half_lo3_restores_player_scores_across_sv_restart(self):
         self.assertIn("restoringScores_", PLUGIN_H)

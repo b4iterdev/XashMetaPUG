@@ -164,7 +164,11 @@ bool Plugin::OnMessageBegin(int destination, int type, const float *origin, edic
         message_.name = name;
     }
 
-    suppressCurrentMessage_ = message_.name == "TeamScore" && ShouldRewriteTeamScoreMessage() && !replayingScoreMessages_;
+    const int targetIndex = PlayerIndex(entity);
+    const bool pendingClassMenu = (message_.name == "VGUIMenu" || message_.name == "ShowMenu") &&
+        IsConnectedPlayerIndex(targetIndex) && players_[targetIndex].pendingClassSlot > 0;
+    suppressCurrentMessage_ = pendingClassMenu ||
+        (message_.name == "TeamScore" && ShouldRewriteTeamScoreMessage() && !replayingScoreMessages_);
     return suppressCurrentMessage_;
 }
 
@@ -659,6 +663,7 @@ void Plugin::SwapTeams()
         const Team newTeam = (targetTeam == 2) ? Team::CounterTerrorist : Team::Terrorist;
         // Pre-assign a random model for the new team so the engine skips the class selection menu
         AssignRandomModelForTeam(entity, newTeam);
+        QueueRandomClassSelection(i, entity, newTeam);
         char joinCommand[] = "jointeam %d\n";
         g_engfuncs.pfnClientCommand(entity, joinCommand, targetTeam);
         if (targetTeam == 2) ++movedT;
@@ -693,6 +698,51 @@ void Plugin::AssignRandomModelForTeam(edict_t *entity, Team team)
         const int count = static_cast<int>(sizeof(kCTModels) / sizeof(kCTModels[0]));
         player->m_iModelName = kCTModels[std::rand() % count];
     }
+}
+
+int Plugin::RandomClassSlotForTeam(Team team) const
+{
+    if (team == Team::Terrorist || team == Team::CounterTerrorist) {
+        return 1 + (std::rand() % 4);
+    }
+    return 0;
+}
+
+void Plugin::QueueRandomClassSelection(int index, edict_t *entity, Team team)
+{
+    if (!IsConnectedPlayerIndex(index) || !entity || FNullEnt(entity)) {
+        return;
+    }
+    const int classSlot = RandomClassSlotForTeam(team);
+    if (classSlot <= 0) {
+        return;
+    }
+    players_[index].pendingClassSlot = classSlot;
+    Schedule(Format("force_class_%d_a", index), 0.1f, false, [this, index]() { ForcePendingClassSelection(index); });
+    Schedule(Format("force_class_%d_b", index), 0.5f, false, [this, index]() { ForcePendingClassSelection(index); });
+    Schedule(Format("force_class_%d_c", index), 1.0f, false, [this, index]() { ForcePendingClassSelection(index); });
+    Schedule(Format("clear_class_%d", index), 2.0f, false, [this, index]() { ClearPendingClassSelection(index); });
+}
+
+void Plugin::ForcePendingClassSelection(int index)
+{
+    if (!IsConnectedPlayerIndex(index) || players_[index].pendingClassSlot <= 0) {
+        return;
+    }
+    edict_t *entity = INDEXENT(index);
+    if (FNullEnt(entity)) {
+        return;
+    }
+    char classCommand[] = "joinclass %d\n";
+    g_engfuncs.pfnClientCommand(entity, classCommand, players_[index].pendingClassSlot);
+}
+
+void Plugin::ClearPendingClassSelection(int index)
+{
+    if (index <= 0 || index > kMaxClients) {
+        return;
+    }
+    players_[index].pendingClassSlot = 0;
 }
 
 void Plugin::SwapSideScores()
