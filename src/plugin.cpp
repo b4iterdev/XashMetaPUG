@@ -23,6 +23,7 @@ Plugin &GetPlugin()
 
 void Plugin::OnMetaAttach()
 {
+    std::srand(static_cast<unsigned>(std::time(nullptr)));
     RegisterCvars();
     LoadAdmins();
     g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_forcestart"), []() {
@@ -586,6 +587,9 @@ void Plugin::SwapTeams()
         }
 
         const int targetTeam = (players_[i].team == Team::Terrorist) ? 2 : 1;
+        const Team newTeam = (targetTeam == 2) ? Team::CounterTerrorist : Team::Terrorist;
+        // Pre-assign a random model for the new team so the engine skips the class selection menu
+        AssignRandomModelForTeam(entity, newTeam);
         char joinCommand[] = "jointeam %d\n";
         g_engfuncs.pfnClientCommand(entity, joinCommand, targetTeam);
         if (targetTeam == 2) ++movedT;
@@ -594,6 +598,32 @@ void Plugin::SwapTeams()
     Log("SwapTeams: %d -> CT, %d -> T, %d skipped (spec/unknown)", movedT, movedCT, skipped);
 
     Broadcast("[XMP] Players have been switched. Team scores are tracked by the engine.\n");
+}
+
+void Plugin::AssignRandomModelForTeam(edict_t *entity, Team team)
+{
+    if (!entity || FNullEnt(entity)) {
+        return;
+    }
+    CBasePlayer *player = CBasePlayer::Instance(entity);
+    if (!player) {
+        return;
+    }
+
+    static constexpr ModelName kTModels[] = {
+        MODEL_URBAN, MODEL_TERROR, MODEL_LEET, MODEL_ARCTIC, MODEL_GUERILLA, MODEL_MILITIA
+    };
+    static constexpr ModelName kCTModels[] = {
+        MODEL_GSG9, MODEL_GIGN, MODEL_SAS, MODEL_SPETSNAZ
+    };
+
+    if (team == Team::Terrorist) {
+        const int count = static_cast<int>(sizeof(kTModels) / sizeof(kTModels[0]));
+        player->m_iModelName = kTModels[std::rand() % count];
+    } else if (team == Team::CounterTerrorist) {
+        const int count = static_cast<int>(sizeof(kCTModels) / sizeof(kCTModels[0]));
+        player->m_iModelName = kCTModels[std::rand() % count];
+    }
 }
 
 void Plugin::SwapSideScores()

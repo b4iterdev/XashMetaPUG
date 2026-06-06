@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -140,6 +141,7 @@ private:
     void PauseMatch();
     void UnpauseMatch();
     void SwapTeams();
+    void AssignRandomModelForTeam(edict_t *entity, Team team);
     void SwapSideScores();
     bool ShouldPreservePlayerScores(MatchState liveState) const;
     void HandleRoundScore(Team team, int score);

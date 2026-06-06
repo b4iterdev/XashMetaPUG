@@ -203,6 +203,25 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("pfnWriteByte(flash ? 1 : 0)", PLUGIN_CPP)
         self.assertIn("int MoneyMessageId()", PLUGIN_H)
 
+    def test_swap_teams_preassigns_random_model_to_skip_class_menu(self):
+        self.assertIn("AssignRandomModelForTeam(entity, newTeam)", PLUGIN_CPP)
+        self.assertIn("void AssignRandomModelForTeam(edict_t *entity, Team team)", PLUGIN_H)
+        self.assertIn("static constexpr ModelName kTModels[]", PLUGIN_CPP)
+        self.assertIn("static constexpr ModelName kCTModels[]", PLUGIN_CPP)
+        self.assertIn("MODEL_URBAN", PLUGIN_CPP)
+        self.assertIn("MODEL_TERROR", PLUGIN_CPP)
+        self.assertIn("MODEL_LEET", PLUGIN_CPP)
+        self.assertIn("MODEL_ARCTIC", PLUGIN_CPP)
+        self.assertIn("MODEL_GUERILLA", PLUGIN_CPP)
+        self.assertIn("MODEL_MILITIA", PLUGIN_CPP)
+        self.assertIn("MODEL_GSG9", PLUGIN_CPP)
+        self.assertIn("MODEL_GIGN", PLUGIN_CPP)
+        self.assertIn("MODEL_SAS", PLUGIN_CPP)
+        self.assertIn("MODEL_SPETSNAZ", PLUGIN_CPP)
+        self.assertIn("player->m_iModelName = kTModels[std::rand() % count]", PLUGIN_CPP)
+        self.assertIn("player->m_iModelName = kCTModels[std::rand() % count]", PLUGIN_CPP)
+        self.assertIn("std::srand(static_cast<unsigned>(std::time(nullptr)))", PLUGIN_CPP)
+
 
 if __name__ == "__main__":
     unittest.main()
