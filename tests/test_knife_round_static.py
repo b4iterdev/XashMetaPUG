@@ -36,6 +36,16 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("HandleSideSelection(entity, true)", PLUGIN_CPP)
         self.assertIn("players_[index].team != knifeWinner_", PLUGIN_CPP)
 
+    def test_swap_delays_lo3_until_forced_class_selection_settles(self):
+        side_idx = PLUGIN_CPP.index("void Plugin::HandleSideSelection")
+        side_body = PLUGIN_CPP[side_idx:side_idx + 1200]
+        self.assertIn("SwapTeams();", side_body)
+        self.assertIn('Schedule("post_swap_lo3", 2.1f, false', side_body)
+        self.assertIn("return;", side_body)
+        self.assertLess(side_body.index("SwapTeams();"), side_body.index('Schedule("post_swap_lo3", 2.1f, false'))
+        self.assertIn("StartLO3(MatchState::FirstHalf);", side_body)
+        self.assertLess(side_body.index('Schedule("post_swap_lo3", 2.1f, false'), side_body.rindex("StartLO3(MatchState::FirstHalf);"))
+
     def test_side_switching_is_blocked_while_live(self):
         self.assertIn("IsLiveState(state_)", PLUGIN_CPP)
         self.assertIn('strcasecmp(cmd, "jointeam") == 0', PLUGIN_CPP)

@@ -842,6 +842,8 @@ void Plugin::HandleSideSelection(edict_t *entity, bool swapSides)
     if (swapSides) {
         Broadcast("[XMP] Knife winner chose to swap sides.\n");
         SwapTeams();
+        Schedule("post_swap_lo3", 2.1f, false, [this]() { StartLO3(MatchState::FirstHalf); });
+        return;
     } else {
         Broadcast("[XMP] Knife winner chose to stay.\n");
     }
