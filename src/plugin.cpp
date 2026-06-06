@@ -456,7 +456,7 @@ void Plugin::FinishLO3()
     RestoreKnifeRoundWeapons();
     SetState(pendingLiveState_);
     if (preservePlayerScores) {
-        ResetLivePlayerMoney(800);
+        ResetLivePlayerLoadout(800);
     } else {
         ServerCommand("sv_restart 3\n");
     }
@@ -869,7 +869,7 @@ bool Plugin::SetPlayerMoneyNative(edict_t *entity, int money, bool flash)
     return true;
 }
 
-void Plugin::ResetLivePlayerMoney(int money)
+void Plugin::ResetLivePlayerLoadout(int money)
 {
     ServerCommand("mp_startmoney %d\n", money);
     for (int i = 1; i <= kMaxClients; ++i) {
@@ -877,9 +877,43 @@ void Plugin::ResetLivePlayerMoney(int money)
         if (players_[i].team != Team::Terrorist && players_[i].team != Team::CounterTerrorist) {
             continue;
         }
-        SetPlayerMoneyNative(INDEXENT(i), money, false);
+        edict_t *entity = INDEXENT(i);
+        ResetLivePlayerInventory(entity);
+        SetPlayerMoneyNative(entity, money, false);
     }
-    Log("ResetLivePlayerMoney: applied %d to active players", money);
+    Log("ResetLivePlayerLoadout: applied default inventory and %d money to active players", money);
+}
+
+void Plugin::ResetLivePlayerInventory(edict_t *entity)
+{
+    if (!entity || FNullEnt(entity)) {
+        return;
+    }
+
+    const int index = PlayerIndex(entity);
+    if (!IsConnectedPlayerIndex(index)) {
+        return;
+    }
+
+    CBasePlayer *player = CBasePlayer::Instance(entity);
+    if (player) {
+        player->m_iKevlar = ARMOR_NONE;
+        player->m_bHasPrimary = false;
+        player->m_bHasC4 = false;
+        player->m_bHasDefuser = false;
+        player->m_bHasNightVision = false;
+        std::fill(std::begin(player->m_rgAmmo), std::end(player->m_rgAmmo), 0);
+        std::fill(std::begin(player->m_rgAmmoLast), std::end(player->m_rgAmmoLast), 0);
+    }
+    entity->v.armorvalue = 0.0f;
+
+    StripPlayerWeaponsNative(entity);
+    GiveItemNative(entity, "weapon_knife");
+    if (players_[index].team == Team::Terrorist) {
+        GiveItemNative(entity, "weapon_glock18");
+    } else if (players_[index].team == Team::CounterTerrorist) {
+        GiveItemNative(entity, "weapon_usp");
+    }
 }
 
 void Plugin::EnforceKnifeRoundPlayerNative(edict_t *entity)

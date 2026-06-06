@@ -169,7 +169,8 @@ private:
     bool StripPlayerWeaponsNative(edict_t *entity) const;
     bool GiveItemNative(edict_t *entity, const char *classname) const;
     bool SetPlayerMoneyNative(edict_t *entity, int money, bool flash);
-    void ResetLivePlayerMoney(int money);
+    void ResetLivePlayerLoadout(int money);
+    void ResetLivePlayerInventory(edict_t *entity);
     void EnforceKnifeRoundPlayerNative(edict_t *entity);
     bool IsKnifeRoundState(MatchState state) const;
 

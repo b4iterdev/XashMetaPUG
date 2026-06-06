@@ -93,10 +93,24 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("lastObservedCTScore_ = 0", PLUGIN_CPP)
         self.assertNotIn("lastObservedTScore_ = terroristScore_", PLUGIN_CPP)
         self.assertNotIn("lastObservedCTScore_ = ctScore_", PLUGIN_CPP)
-        self.assertIn("ResetLivePlayerMoney(800)", PLUGIN_CPP)
-        self.assertIn("void ResetLivePlayerMoney(int money)", PLUGIN_H)
-        self.assertIn("SetPlayerMoneyNative(INDEXENT(i), money, false)", PLUGIN_CPP)
+        self.assertIn("ResetLivePlayerLoadout(800)", PLUGIN_CPP)
+        self.assertIn("void ResetLivePlayerLoadout(int money)", PLUGIN_H)
+        self.assertIn("SetPlayerMoneyNative(entity, money, false)", PLUGIN_CPP)
         self.assertIn('ServerCommand("mp_startmoney %d\\n", money)', PLUGIN_CPP)
+
+    def test_second_half_lo3_resets_inventory_like_restart_without_restart(self):
+        self.assertIn("void ResetLivePlayerInventory(edict_t *entity)", PLUGIN_H)
+        self.assertIn("ResetLivePlayerInventory(entity)", PLUGIN_CPP)
+        self.assertIn("player->m_iKevlar = ARMOR_NONE", PLUGIN_CPP)
+        self.assertIn("entity->v.armorvalue = 0.0f", PLUGIN_CPP)
+        self.assertIn("player->m_bHasPrimary = false", PLUGIN_CPP)
+        self.assertIn("player->m_bHasC4 = false", PLUGIN_CPP)
+        self.assertIn("player->m_bHasDefuser = false", PLUGIN_CPP)
+        self.assertIn("std::fill(std::begin(player->m_rgAmmo), std::end(player->m_rgAmmo), 0)", PLUGIN_CPP)
+        self.assertIn("StripPlayerWeaponsNative(entity)", PLUGIN_CPP)
+        self.assertIn('GiveItemNative(entity, "weapon_knife")', PLUGIN_CPP)
+        self.assertIn('GiveItemNative(entity, "weapon_glock18")', PLUGIN_CPP)
+        self.assertIn('GiveItemNative(entity, "weapon_usp")', PLUGIN_CPP)
 
     def test_knife_round_zeroes_money_and_strips_pistol_without_disabling_buy(self):
         self.assertIn("EnforceKnifeRoundWeapons()", PLUGIN_CPP)
