@@ -29,6 +29,48 @@ void Plugin::OnMetaAttach()
     g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_forcestart"), []() {
         GetPlugin().ForceStartFromServer();
     });
+    g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_start"), []() {
+        GetPlugin().Log("xmp_start executed from server console");
+        GetPlugin().StartReady();
+    });
+    g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_stop"), []() {
+        GetPlugin().Log("xmp_stop executed from server console");
+        GetPlugin().StopMatch();
+    });
+    g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_restart"), []() {
+        GetPlugin().Log("xmp_restart executed from server console");
+        GetPlugin().RestartMatch();
+    });
+    g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_pause"), []() {
+        GetPlugin().Log("xmp_pause executed from server console");
+        GetPlugin().PauseMatch();
+    });
+    g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_unpause"), []() {
+        GetPlugin().Log("xmp_unpause executed from server console");
+        GetPlugin().UnpauseMatch();
+    });
+    g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_swap"), []() {
+        Plugin &p = GetPlugin();
+        p.Log("xmp_swap executed from server console");
+        if (p.IsLiveState(p.state_)) {
+            g_engfuncs.pfnServerPrint("Side switching is disabled while LIVE.\n");
+        } else {
+            p.SwapTeams();
+        }
+    });
+    g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_score"), []() {
+        Plugin &p = GetPlugin();
+        p.Log("xmp_score executed from server console");
+        char buf[128];
+        std::snprintf(buf, sizeof(buf), "Score T %d - CT %d. Round %d/%d.\n",
+                      p.terroristScore_, p.ctScore_, p.totalRoundCount_, p.CvarInt(p.cvars_.matchRounds));
+        g_engfuncs.pfnServerPrint(buf);
+    });
+    g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_reload"), []() {
+        GetPlugin().Log("xmp_reload executed from server console");
+        GetPlugin().LoadAdmins();
+        g_engfuncs.pfnServerPrint("Admin list reloaded.\n");
+    });
     Log("XashMetaPUG attached");
 }
 
