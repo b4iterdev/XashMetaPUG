@@ -1,4 +1,5 @@
 #include "plugin.h"
+#include "regamedll.h"
 
 enginefuncs_t g_engfuncs;
 globalvars_t *gpGlobals = nullptr;
@@ -109,11 +110,13 @@ C_DLLEXPORT int Meta_Attach(PLUG_LOADTIME now, META_FUNCTIONS *functionTable, me
     gpMetaGlobals = metaGlobals;
     gpGamedllFuncs = gameDllFuncs;
     xmp::GetPlugin().OnMetaAttach();
+    xmp::ReGameDLL_Init();
     return TRUE;
 }
 
 C_DLLEXPORT int Meta_Detach(PLUG_LOADTIME now, PL_UNLOAD_REASON reason)
 {
+    xmp::ReGameDLL_Stop();
     xmp::GetPlugin().OnServerDeactivate();
     return TRUE;
 }

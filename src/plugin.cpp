@@ -1612,4 +1612,186 @@ const char *Plugin::TeamName(Team team) const
 
 
 
+// ── ReGameDLL Hook Implementations ──────────────────────────────────────────
+
+void Plugin::OnRoundEnd(int winStatus)
+{
+    if (state_ == MatchState::Disabled)
+        return;
+
+    Team winner = Team::Unknown;
+    if (winStatus == WINSTATUS_TERRORISTS)
+        winner = Team::Terrorist;
+    else if (winStatus == WINSTATUS_CTS)
+        winner = Team::CounterTerrorist;
+
+    if (state_ == MatchState::KnifeRound) {
+        if (winner == Team::Terrorist || winner == Team::CounterTerrorist) {
+            knifeWinner_ = winner;
+            knifeRoundCompleted_ = true;
+            sideSelectionPending_ = true;
+            restarting_ = false;
+            RestoreKnifeRoundWeapons();
+            Schedule("knife_winner_transition", 0.0f, false, [this]() {
+                SetState(MatchState::SideSelection);
+                Broadcast("[XMP] Knife round winner: %s. Type .stay or .swap.\n",
+                          TeamName(knifeWinner_));
+            });
+        }
+        return;
+    }
+
+    if (!IsLiveState(state_))
+        return;
+
+    if (winner == Team::Terrorist) {
+        ++terroristScore_;
+        ++halfRoundCount_;
+        ++totalRoundCount_;
+    } else if (winner == Team::CounterTerrorist) {
+        ++ctScore_;
+        ++halfRoundCount_;
+        ++totalRoundCount_;
+    } else {
+        return;
+    }
+
+    Broadcast("[XMP] Score T %d - CT %d. Round %d/%d.\n",
+              terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
+    EvaluateMatchProgress();
+}
+
+void Plugin::OnRoundRestart()
+{
+    Log("OnRoundRestart");
+}
+
+void Plugin::OnRoundFreezeEnd()
+{
+}
+
+void Plugin::OnPlayerSpawnEquip(CBasePlayer *player, bool addDefault, bool equipGame)
+{
+    if (!player)
+        return;
+
+    edict_t *entity = player->edict();
+    if (!entity || FNullEnt(entity))
+        return;
+
+    const int index = ENTINDEX(entity);
+    if (!IsConnectedPlayerIndex(index))
+        return;
+
+    if (state_ == MatchState::KnifeRound || knifeRoundWeaponsEnforced_) {
+        // Block default equipment by NOT calling chain->callNext.
+        // Give only the knife via existing native helpers.
+        StripPlayerWeaponsNative(entity);
+        GiveItemNative(entity, "weapon_knife");
+        SetPlayerMoneyNative(entity, 0, false);
+        return;
+    }
+}
+
+void Plugin::OnPlayerSpawn(CBasePlayer *player)
+{
+    if (!player)
+        return;
+
+    edict_t *entity = player->edict();
+    if (!entity || FNullEnt(entity))
+        return;
+
+    const int index = ENTINDEX(entity);
+    if (!IsConnectedPlayerIndex(index))
+        return;
+
+    if (IsPracticeState(state_)) {
+        EnforcePracticePlayer(entity);
+    }
+}
+
+void Plugin::OnPlayerKilled(CBasePlayer *player, entvars_t *pevAttacker, int iGib)
+{
+    if (!player)
+        return;
+}
+
+void Plugin::OnPlayerTakeDamage(CBasePlayer *pThis, entvars_t *pevAttacker,
+    float flDamage, int bitsDamageType)
+{
+}
+
+BOOL Plugin::OnChooseTeam(IReGameHook_HandleMenu_ChooseTeam *chain,
+    CBasePlayer *player, int slot)
+{
+    if (IsSideSwitchBlocked(state_)) {
+        if (player) {
+            g_engfuncs.pfnMessageBegin(MSG_ALL, GET_USER_MSG_ID(PLID, "TextMsg", nullptr), nullptr, nullptr);
+            g_engfuncs.pfnWriteByte(HUD_PRINTCENTER);
+            g_engfuncs.pfnWriteString("#Game_Commencing");
+            g_engfuncs.pfnMessageEnd();
+            // Player will see a chat message from the existing BlockTeamSwitch path
+        }
+        return TRUE;
+    }
+
+    return chain->callNext(player, slot);
+}
+
+void Plugin::OnPlayerSwitchTeam(CBasePlayer *player)
+{
+    if (!player)
+        return;
+
+    const int index = ENTINDEX(player->edict());
+    if (!IsConnectedPlayerIndex(index))
+        return;
+
+}
+
+void Plugin::OnPlayerGetIntoGame(CBasePlayer *player)
+{
+    if (!player)
+        return;
+
+    UpdatePlayer(player->edict());
+}
+
+void Plugin::OnPlayerAddAccount(CBasePlayer *player, int Amount,
+    RewardType Type, bool TrackChange)
+{
+    if (!player)
+        return;
+
+    // During knife round, money is passed through the chain but the
+    // existing EnforceKnifeRoundPlayerNative / OnPlayerSpawnEquip hook
+    // already resets money to 0 on spawn. Additional money events during
+    // the round (e.g. kill rewards) are passed through; the knife-round
+    // money cvars (mp_startmoney 0, mp_maxmoney 0) prevent meaningful
+    // accumulation.
+    (void)Amount;
+    (void)Type;
+    (void)TrackChange;
+}
+
+void Plugin::OnCSPlayerKilled(CBasePlayer *pVictim, entvars_s *pevKiller,
+    entvars_s *pevInflictor)
+{
+}
+
+bool Plugin::OnInternalCommand(edict_t *pEntity, const char *pcmd, const char *parg1)
+{
+    if (!pEntity || !pcmd)
+        return false;
+
+    if ((strcmp(pcmd, "jointeam") == 0 || strcmp(pcmd, "changeteam") == 0)
+        && IsSideSwitchBlocked(state_))
+    {
+        return true;
+    }
+
+    return false;
+}
+
 } // namespace xmp

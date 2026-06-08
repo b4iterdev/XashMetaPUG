@@ -22,6 +22,8 @@
 #include <extdll.h>
 #include <eiface.h>
 #include <meta_api.h>
+#include <regamedll_api.h>
+#include <gamerules.h>
 
 extern enginefuncs_t g_engfuncs;
 extern globalvars_t *gpGlobals;
@@ -118,6 +120,21 @@ public:
     bool OnWriteString(const char *value);
     bool OnMessageEnd();
     void ForceStartFromServer();
+
+    // ReGameDLL hook callbacks
+    void OnRoundEnd(int winStatus);
+    void OnRoundRestart();
+    void OnRoundFreezeEnd();
+    void OnPlayerSpawnEquip(CBasePlayer *player, bool addDefault, bool equipGame);
+    void OnPlayerSpawn(CBasePlayer *player);
+    void OnPlayerKilled(CBasePlayer *player, entvars_t *pevAttacker, int iGib);
+    void OnPlayerTakeDamage(CBasePlayer *pThis, entvars_t *pevAttacker, float flDamage, int bitsDamageType);
+    BOOL OnChooseTeam(IReGameHook_HandleMenu_ChooseTeam *chain, CBasePlayer *player, int slot);
+    void OnPlayerSwitchTeam(CBasePlayer *player);
+    void OnPlayerGetIntoGame(CBasePlayer *player);
+    void OnPlayerAddAccount(CBasePlayer *player, int Amount, RewardType Type, bool TrackChange);
+    void OnCSPlayerKilled(CBasePlayer *pVictim, entvars_s *pevKiller, entvars_s *pevInflictor);
+    bool OnInternalCommand(edict_t *pEntity, const char *pcmd, const char *parg1);
 
 private:
     void RegisterCvars();
