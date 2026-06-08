@@ -768,17 +768,28 @@ void Plugin::HandleRoundScore(Team team, int score)
         return;
     }
 
-    // Live state (FirstHalf/SecondHalf/Overtime):
-    // OnRoundEnd (ReGameDLL hook) is now the authoritative tracker for match
-    // scores. This function only updates the displayed team score on the client
-    // scoreboard and tracks lastObserved for internal consistency.
-    this->restarting_ = false;
-    if (team == Team::Terrorist) {
-        lastObservedTScore_ = score;
-        SetDisplayedTeamScore(team, terroristScore_, true);
-    } else if (team == Team::CounterTerrorist) {
-        lastObservedCTScore_ = score;
-        SetDisplayedTeamScore(team, ctScore_, true);
+    bool increment = false;
+    if (team == Team::Terrorist && score > lastObservedTScore_) {
+        terroristScore_ += score - lastObservedTScore_;
+        increment = true;
+    } else if (team == Team::CounterTerrorist && score > lastObservedCTScore_) {
+        ctScore_ += score - lastObservedCTScore_;
+        increment = true;
+    }
+
+    if (team == Team::Terrorist) lastObservedTScore_ = score;
+    if (team == Team::CounterTerrorist) lastObservedCTScore_ = score;
+
+    if (increment) {
+        this->restarting_ = false;
+        ++halfRoundCount_;
+        ++totalRoundCount_;
+        if (state_ == MatchState::Overtime) {
+            ++overtimeRoundCount_;
+        }
+        SetDisplayedTeamScore(team, team == Team::Terrorist ? terroristScore_ : ctScore_, true);
+        Broadcast("[XMP] Score T %d - CT %d. Round %d/%d.\n", terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
+        EvaluateMatchProgress();
     }
 }
 
@@ -1649,8 +1660,6 @@ void Plugin::OnRoundEnd(int winStatus)
     } else {
         return;
     }
-
-    this->restarting_ = false;
 
     Broadcast("[XMP] Score T %d - CT %d. Round %d/%d.\n",
               terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
