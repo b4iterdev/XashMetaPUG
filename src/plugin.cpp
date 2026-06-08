@@ -1331,6 +1331,7 @@ void Plugin::EnterOvertime()
 void Plugin::FinishMatch()
 {
     SetState(MatchState::Finished);
+    ServerCommand("mp_timelimit 0.1\n");
     if (terroristScore_ == ctScore_) {
         Broadcast("[XMP] Match finished tied: %d-%d.\n", terroristScore_, ctScore_);
     } else {
