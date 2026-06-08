@@ -609,6 +609,10 @@ void Plugin::FinishLO3()
     }
     KillRandomPlayer();
     ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
+    g_engfuncs.pfnMessageBegin(MSG_ALL, GET_USER_MSG_ID(PLID, "TextMsg", nullptr), nullptr, nullptr);
+    g_engfuncs.pfnWriteByte(HUD_PRINTCENTER);
+    g_engfuncs.pfnWriteString("LIVE! LIVE! LIVE!");
+    g_engfuncs.pfnMessageEnd();
     if (!preservePlayerScores) {
         if (!recording_) {
             char demoName[128];
