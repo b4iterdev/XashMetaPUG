@@ -513,6 +513,10 @@ void Plugin::StartKnifeRound()
     SetState(MatchState::KnifeRound);
     EnforceKnifeRoundWeapons();
     Broadcast("[XMP] Knife round starting. Winner chooses side with .stay or .swap.\n");
+    g_engfuncs.pfnMessageBegin(MSG_ALL, GET_USER_MSG_ID(PLID, "TextMsg", nullptr), nullptr, nullptr);
+    g_engfuncs.pfnWriteByte(HUD_PRINTCENTER);
+    g_engfuncs.pfnWriteString("KNIFE! KNIFE! KNIFE!");
+    g_engfuncs.pfnMessageEnd();
     ServerCommand("sv_restart 1\n");
     Schedule("knife_strip", 1.5f, false, [this]() { StripKnifeRoundWeapons(); });
 }
