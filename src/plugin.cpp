@@ -593,6 +593,7 @@ void Plugin::FinishLO3()
         // LO3 schedule already ran sv_restart 3 at 2.0s. lo3_finish fires
         // 3s later at 5.0s, matching the restart completion timing.
     }
+    KillRandomPlayer();
     ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
     if (!preservePlayerScores) {
         SyncDisplayedTeamScoresFromMatchScores(true);
@@ -1224,6 +1225,23 @@ void Plugin::StripKnifeRoundWeapons()
         edict_t *entity = INDEXENT(i);
         EnforceKnifeRoundPlayerNative(entity);
     }
+}
+
+void Plugin::KillRandomPlayer()
+{
+    std::vector<edict_t *> alive;
+    for (int i = 1; i <= kMaxClients; ++i) {
+        if (!players_[i].connected) continue;
+        edict_t *entity = INDEXENT(i);
+        if (FNullEnt(entity)) continue;
+        if (entity->v.health > 0 && entity->v.deadflag == DEAD_NO) {
+            alive.push_back(entity);
+        }
+    }
+    if (alive.empty()) return;
+    edict_t *victim = alive[std::rand() % alive.size()];
+    g_engfuncs.pfnClientCommand(victim, "kill\n");
+    Log("[XMP] Pre-triggered kill on player #%d to fire #Game_Commencing.\n", PlayerIndex(victim));
 }
 
 void Plugin::RestoreKnifeRoundWeapons()
