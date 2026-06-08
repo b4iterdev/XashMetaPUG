@@ -330,6 +330,8 @@ void Plugin::ResetMatch(bool keepWarmup)
     syncingScoreboard_ = false;
     knifeRoundCompleted_ = false;
     sideSelectionPending_ = false;
+    teamAName_.clear();
+    teamBName_.clear();
     if (recording_) {
         ServerCommand("stoprecording\n");
         recording_ = false;
@@ -485,6 +487,10 @@ void Plugin::StartMatch(bool force)
         Broadcast("[XMP] Need %d player(s) to start.\n", CvarInt(cvars_.playersMin));
         return;
     }
+    if (!force && state_ != MatchState::HalfTime && (teamAName_.empty() || teamBName_.empty())) {
+        Broadcast("[XMP] Both teams must set a team name first. Use .teamname <name>.\n");
+        return;
+    }
 
     if (state_ == MatchState::HalfTime || (state_ == MatchState::WaitingReady && pendingLiveState_ == MatchState::SecondHalf)) {
         pendingLiveState_ = MatchState::SecondHalf;
@@ -604,9 +610,25 @@ void Plugin::FinishLO3()
             char demoName[128];
             const std::time_t now = std::time(nullptr);
             std::strftime(demoName, sizeof(demoName), "xmp_%Y%m%d_%H%M%S", std::localtime(&now));
-            ServerCommand("record %s\n", demoName);
+            auto sanitize = [](const std::string &s) -> std::string {
+                std::string out;
+                out.reserve(s.size());
+                for (char c : s) {
+                    if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_') {
+                        out += c;
+                    } else {
+                        out += '_';
+                    }
+                }
+                return out.empty() ? "unknown" : out;
+            };
+            char fullName[256];
+            const char *tName = teamAName_.empty() ? "T" : sanitize(teamAName_).c_str();
+            const char *ctName = teamBName_.empty() ? "CT" : sanitize(teamBName_).c_str();
+            std::snprintf(fullName, sizeof(fullName), "%s_vs_%s_%s", tName, ctName, demoName);
+            ServerCommand("record %s\n", fullName);
             recording_ = true;
-            Log("[XMP] Started demo recording: %s\n", demoName);
+            Log("[XMP] Started demo recording: %s\n", fullName);
         }
         SyncDisplayedTeamScoresFromMatchScores(true);
         // Clear ScoreInfo cache so halftime practice kills don't replay on the LIVE scoreboard
@@ -1389,10 +1411,36 @@ bool Plugin::DispatchPlayerCommand(edict_t *entity, const std::string &command)
         HandleSideSelection(entity, true);
     } else if (normalized == "status") {
         Say(entity, "[XMP] State: %s. Ready %d/%d. Players %d/%d.\n", StateName(state_), ReadyPlayers(), GetRequiredReadyCount(), ConnectedPlayers(), CvarInt(cvars_.playersMax));
+        if (!teamAName_.empty() || !teamBName_.empty()) {
+            Say(entity, "[XMP] Teams: %s vs %s.\n",
+                teamAName_.empty() ? "T" : teamAName_.c_str(),
+                teamBName_.empty() ? "CT" : teamBName_.c_str());
+        }
+    } else if (normalized == "teamname" || normalized.rfind("teamname ", 0) == 0) {
+        if (state_ != MatchState::Warmup && state_ != MatchState::WaitingReady && state_ != MatchState::HalfTime) {
+            Say(entity, "[XMP] Can only set team name before the match starts.\n");
+            return true;
+        }
+        const std::string name = (normalized.size() > 10) ? normalized.substr(10) : "";
+        if (name.empty() || name.length() > 32) {
+            Say(entity, "[XMP] Usage: .teamname <name> (max 32 characters).\n");
+            return true;
+        }
+        const int index = PlayerIndex(entity);
+        if (!IsConnectedPlayerIndex(index)) return true;
+        if (players_[index].team == Team::Terrorist) {
+            teamAName_ = name;
+            Broadcast("[XMP] Terrorist team name set to: %s.\n", name.c_str());
+        } else if (players_[index].team == Team::CounterTerrorist) {
+            teamBName_ = name;
+            Broadcast("[XMP] Counter-Terrorist team name set to: %s.\n", name.c_str());
+        } else {
+            Say(entity, "[XMP] You must be on a team (T or CT) to set a team name.\n");
+        }
     } else if (normalized == "score") {
         Say(entity, "[XMP] Score T %d - CT %d. Round %d/%d.\n", terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
     } else if (normalized == "help") {
-        Say(entity, "[XMP] Commands: .ready .notready .status .score .help\n");
+        Say(entity, "[XMP] Commands: .ready .notready .teamname .status .score .help\n");
     } else {
         return false;
     }

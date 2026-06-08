@@ -266,6 +266,8 @@ private:
     bool knifeRoundWeaponsEnforced_ = false;
     bool restoringScores_ = false;
     bool recording_ = false;
+    std::string teamAName_;
+    std::string teamBName_;
     Team knifeWinner_ = Team::Unknown;
     int teamScoreMessageId_ = 0;
     int scoreInfoMessageId_ = 0;
