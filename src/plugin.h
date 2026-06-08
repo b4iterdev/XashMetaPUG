@@ -125,7 +125,8 @@ public:
     void OnRoundEnd(int winStatus);
     void OnRoundRestart();
     void OnRoundFreezeEnd();
-    void OnPlayerSpawnEquip(CBasePlayer *player, bool addDefault, bool equipGame);
+    // Returns true if equipment was handled (caller should skip chain->callNext).
+    bool OnPlayerSpawnEquip(CBasePlayer *player, bool addDefault, bool equipGame);
     void OnPlayerSpawn(CBasePlayer *player);
     void OnPlayerKilled(CBasePlayer *player, entvars_t *pevAttacker, int iGib);
     void OnPlayerTakeDamage(CBasePlayer *pThis, entvars_t *pevAttacker, float flDamage, int bitsDamageType);

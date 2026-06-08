@@ -1670,27 +1670,26 @@ void Plugin::OnRoundFreezeEnd()
 {
 }
 
-void Plugin::OnPlayerSpawnEquip(CBasePlayer *player, bool addDefault, bool equipGame)
+bool Plugin::OnPlayerSpawnEquip(CBasePlayer *player, bool addDefault, bool equipGame)
 {
     if (!player)
-        return;
+        return false;
 
     edict_t *entity = player->edict();
     if (!entity || FNullEnt(entity))
-        return;
+        return false;
 
     const int index = ENTINDEX(entity);
     if (!IsConnectedPlayerIndex(index))
-        return;
+        return false;
 
     if (state_ == MatchState::KnifeRound || knifeRoundWeaponsEnforced_) {
-        // Block default equipment by NOT calling chain->callNext.
-        // Give only the knife via existing native helpers.
         StripPlayerWeaponsNative(entity);
         GiveItemNative(entity, "weapon_knife");
         SetPlayerMoneyNative(entity, 0, false);
-        return;
+        return true;
     }
+    return false;
 }
 
 void Plugin::OnPlayerSpawn(CBasePlayer *player)

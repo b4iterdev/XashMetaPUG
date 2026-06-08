@@ -179,8 +179,11 @@ void OnCSGameRules_OnRoundFreezeEnd(IReGameHook_CSGameRules_OnRoundFreezeEnd *ch
 void OnCBasePlayer_OnSpawnEquip(IReGameHook_CBasePlayer_OnSpawnEquip *chain,
     CBasePlayer *player, bool addDefault, bool equipGame)
 {
-    GetPlugin().OnPlayerSpawnEquip(player, addDefault, equipGame);
-    chain->callNext(player, addDefault, equipGame);
+    // If the plugin already handled equipment (knife-round enforcement),
+    // skip the original which would re-add a free pistol.
+    if (!GetPlugin().OnPlayerSpawnEquip(player, addDefault, equipGame)) {
+        chain->callNext(player, addDefault, equipGame);
+    }
 }
 
 void OnCSGameRules_PlayerSpawn(IReGameHook_CSGameRules_PlayerSpawn *chain,
