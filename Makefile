@@ -9,6 +9,8 @@ else
 TARGET ?= cstrike/addons/xashmetapug/dlls/xashmetapug_mm_arm64.so
 endif
 
+CXXFLAGS ?= -std=c++17 -O2 -fPIC -Wall -Wextra -Wpedantic -Wno-unused-parameter -D_LINUX -Dlinux -Dstricmp=strcasecmp -D_stricmp=strcasecmp
+
 # game_shared needed for regamedll_api.h (via gamerules.h -> voice_gamemgr.h)
 INCLUDES := \
 	-I$(SDK_ROOT)/cssdk/common \
@@ -19,10 +21,13 @@ INCLUDES := \
 	-I$(SDK_ROOT)/cssdk/public \
 	-I$(SDK_ROOT)/metamod
 
+# _vsnprintf is a MSVC alias; define it for all platforms (glibc has it, clang on macOS doesn't)
+CXXFLAGS += -D_vsnprintf=vsnprintf
+
 ifeq ($(UNAME_S),Darwin)
 # macOS smoke-test: provide Linux-compat headers and defines
 INCLUDES := -Iinclude/darwin-compat $(INCLUDES)
-CXXFLAGS += -D__linux__ -D_vsnprintf=vsnprintf
+CXXFLAGS += -D__linux__
 endif
 
 SOURCES := $(wildcard src/*.cpp)
