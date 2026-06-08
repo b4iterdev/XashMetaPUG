@@ -163,6 +163,8 @@ private:
     void UnpauseMatch();
     void TimeoutMatch();
     void TechTimeout();
+    void RequestPause(const char *caller, int duration, bool isTech);
+    void ApplyPause();
     void SwapTeams();
     void AssignRandomModelForTeam(edict_t *entity, Team team);
     int RandomClassSlotForTeam(Team team) const;
@@ -210,7 +212,7 @@ private:
     void EnforceKnifeRoundPlayerNative(edict_t *entity);
     bool IsKnifeRoundState(MatchState state) const;
 
-    bool DispatchCommand(edict_t *entity, const std::string &raw);
+    bool DispatchCommand(edict_t *entity, std::string raw);
     bool DispatchPlayerCommand(edict_t *entity, const std::string &command);
     bool DispatchAdminCommand(edict_t *entity, const std::string &command);
     bool IsAdmin(edict_t *entity) const;
@@ -271,6 +273,13 @@ private:
     bool recording_ = false;
     bool techPaused_ = false;
     bool halftimeScoresSaved_ = false;
+    bool pauseRequested_ = false;
+    int pauseDuration_ = 0;
+    float savedFreezeTime_ = 0.0f;
+    float savedBuyTime_ = 0.0f;
+    cvar_t *mpFreezeTimeCvar_ = nullptr;
+    cvar_t *mpBuyTimeCvar_ = nullptr;
+    int roundTimeMsgId_ = 0;
     std::set<int> techUnpauseVotes_{};
     std::string teamAName_;
     std::string teamBName_;

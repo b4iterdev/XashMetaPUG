@@ -1,4 +1,5 @@
 #include "plugin.h"
+#include "regamedll.h"
 
 #ifndef __linux__
 #define __linux__
@@ -19,6 +20,16 @@ Plugin &GetPlugin()
 {
     static Plugin plugin;
     return plugin;
+}
+
+// Access CS game rules through ReGameDLL API instead of the g_pGameRules extern
+// (which lives in the game DLL and is not linkable from our plugin).
+static CHalfLifeMultiplay *GetGameRules()
+{
+    if (g_ReGameApi) {
+        return static_cast<CHalfLifeMultiplay *>(g_ReGameApi->GetGameRules());
+    }
+    return nullptr;
 }
 
 void Plugin::OnMetaAttach()
@@ -95,6 +106,12 @@ void Plugin::ForceStartFromServer()
 
 void Plugin::OnServerActivate()
 {
+    mpFreezeTimeCvar_ = g_engfuncs.pfnCVarGetPointer("mp_freezetime");
+    mpBuyTimeCvar_ = g_engfuncs.pfnCVarGetPointer("mp_buytime");
+    roundTimeMsgId_ = gpMetaUtilFuncs->pfnGetUserMsgID(&Plugin_info, "RoundTime", NULL);
+    if (roundTimeMsgId_ <= 0) {
+        Log("OnServerActivate: RoundTime message not found\n");
+    }
     LoadAdmins();
     ResetMatch(true);
     SetState(CvarInt(cvars_.enabled) ? MatchState::Warmup : MatchState::Disabled);
@@ -129,6 +146,12 @@ void Plugin::OnStartFrame()
         if (callback) {
             callback();
         }
+    }
+
+    // Safety: keep the round frozen while paused
+    if (paused_ && GetGameRules() && !GetGameRules()->m_bFreezePeriod) {
+        GetGameRules()->m_bFreezePeriod = TRUE;
+        GetGameRules()->m_fRoundStartTime = gpGlobals->time;
     }
 }
 
@@ -359,7 +382,7 @@ void Plugin::LoadAdmins()
 void Plugin::ResetMatch(bool keepWarmup)
 {
     ClearTasks();
-    ServerCommand("pausable 0\n");
+    CancelTask("pause_countdown");
     RestoreKnifeRoundWeapons();
     for (auto &player : players_) {
         player.ready = false;
@@ -378,6 +401,8 @@ void Plugin::ResetMatch(bool keepWarmup)
     lastObservedCTScore_ = 0;
     paused_ = false;
     techPaused_ = false;
+    pauseRequested_ = false;
+    pauseDuration_ = 0;
     halftimeScoresSaved_ = false;
     techUnpauseVotes_.clear();
     restarting_ = false;
@@ -748,53 +773,110 @@ void Plugin::RestartMatch()
     StartReady();
 }
 
-void Plugin::PauseMatch()
+void Plugin::RequestPause(const char *caller, int duration, bool isTech)
 {
-    if (paused_) {
-        Broadcast("[XMP] Match is already paused.\n");
+    if (pauseRequested_) {
+        Broadcast("[XMP] A pause is already queued for the next round.\n");
         return;
     }
-    paused_ = true;
-    techPaused_ = false;
+    if (!IsLiveState(state_)) {
+        Broadcast("[XMP] Cannot pause outside of a live match.\n");
+        return;
+    }
+    pauseRequested_ = true;
+    pauseDuration_ = duration;
+    techPaused_ = isTech;
     techUnpauseVotes_.clear();
-    Broadcast("[XMP] Match paused for %.0f seconds.\n", CvarFloat(cvars_.pauseTime));
-    ServerCommand("pausable 1\n");
-    Schedule("pause", CvarFloat(cvars_.pauseTime), false, [this]() { UnpauseMatch(); });
+    if (isTech) {
+        Broadcast("[XMP] %s called a technical timeout. Match will pause on next round start — both teams must .unpause to continue.\n", caller);
+    } else {
+        Broadcast("[XMP] %s paused the match. Pausing on next round start for %d seconds.\n", caller, duration);
+    }
+}
+
+void Plugin::PauseMatch()
+{
+    if (paused_ || pauseRequested_) {
+        Broadcast("[XMP] Match is already pausing or paused.\n");
+        return;
+    }
+    RequestPause("Admin", static_cast<int>(CvarFloat(cvars_.pauseTime)), false);
 }
 
 void Plugin::TimeoutMatch()
 {
-    if (paused_) {
-        Broadcast("[XMP] Match is already paused.\n");
+    if (paused_ || pauseRequested_) {
+        Broadcast("[XMP] Match is already pausing or paused.\n");
         return;
     }
     if (!IsLiveState(state_)) {
         Broadcast("[XMP] Timeout can only be called during a live match.\n");
         return;
     }
-    paused_ = true;
-    techPaused_ = false;
-    techUnpauseVotes_.clear();
-    Broadcast("[XMP] Timeout called — match paused for %.0f seconds.\n", CvarFloat(cvars_.timeoutTime));
-    ServerCommand("pausable 1\n");
-    Schedule("pause", CvarFloat(cvars_.timeoutTime), false, [this]() { UnpauseMatch(); });
+    RequestPause("Timeout", static_cast<int>(CvarFloat(cvars_.timeoutTime)), false);
 }
 
 void Plugin::TechTimeout()
 {
-    if (paused_) {
-        Broadcast("[XMP] Match is already paused.\n");
+    if (paused_ || pauseRequested_) {
+        Broadcast("[XMP] Match is already pausing or paused.\n");
         return;
     }
     if (!IsLiveState(state_)) {
         Broadcast("[XMP] Technical timeout can only be called during a live match.\n");
         return;
     }
+    RequestPause("Tech", static_cast<int>(CvarFloat(cvars_.timeoutTime)), true);
+}
+
+void Plugin::ApplyPause()
+{
+    if (!GetGameRules()) {
+        Log("ApplyPause: CSGameRules is null, cannot pause\n");
+        return;
+    }
     paused_ = true;
-    techPaused_ = true;
-    techUnpauseVotes_.clear();
-    Broadcast("[XMP] Technical timeout called. Match paused until both teams .unpause.\n");
-    ServerCommand("pausable 1\n");
+    pauseRequested_ = false;
+
+    if (mpFreezeTimeCvar_) savedFreezeTime_ = mpFreezeTimeCvar_->value;
+    if (mpBuyTimeCvar_) savedBuyTime_ = mpBuyTimeCvar_->value;
+
+    // Extend mp_freezetime so the engine keeps the round frozen for the pause duration
+    if (mpFreezeTimeCvar_) {
+        g_engfuncs.pfnCvar_DirectSet(mpFreezeTimeCvar_, std::to_string(pauseDuration_).c_str());
+    }
+    if (mpBuyTimeCvar_) {
+        g_engfuncs.pfnCvar_DirectSet(mpBuyTimeCvar_, std::to_string(pauseDuration_).c_str());
+    }
+
+    GetGameRules()->m_bFreezePeriod = TRUE;
+    GetGameRules()->m_fRoundStartTime = gpGlobals->time;
+    GetGameRules()->m_iRoundTimeSecs = pauseDuration_ + 1;
+    GetGameRules()->m_iIntroRoundTime = pauseDuration_ + 1;
+
+    // Send RoundTime message so the client HUD reflects the extended timer
+    if (roundTimeMsgId_ > 0) {
+        g_engfuncs.pfnMessageBegin(MSG_ALL, roundTimeMsgId_, NULL, NULL);
+        g_engfuncs.pfnWriteShort(static_cast<int>(pauseDuration_ + 1));
+        g_engfuncs.pfnMessageEnd();
+    }
+
+    // Periodic countdown updates every 15 seconds
+    if (techPaused_) {
+        Broadcast("[XMP] Technical timeout active. Both teams type .unpause to continue.\n");
+    } else {
+        Broadcast("[XMP] Match paused for %d seconds.\n", pauseDuration_);
+        Schedule("pause", static_cast<float>(pauseDuration_), false, [this]() { UnpauseMatch(); });
+    }
+
+    Schedule("pause_countdown", 15.0f, true, [this]() {
+        if (!paused_ || !GetGameRules()) return;
+        const float elapsed = gpGlobals->time - GetGameRules()->m_fRoundStartTime;
+        const int remaining = pauseDuration_ - static_cast<int>(elapsed);
+        if (remaining > 0 && !techPaused_) {
+            Broadcast("[XMP] Match unpausing in ~%d seconds.\n", remaining);
+        }
+    });
 }
 
 void Plugin::UnpauseMatch()
@@ -802,11 +884,35 @@ void Plugin::UnpauseMatch()
     if (!paused_) {
         return;
     }
+
+    CancelTask("pause");
+    CancelTask("pause_countdown");
+
+    // Restore original freezetime
+    if (mpFreezeTimeCvar_ && savedFreezeTime_ > 0.0f) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.0f", savedFreezeTime_);
+        g_engfuncs.pfnCvar_DirectSet(mpFreezeTimeCvar_, buf);
+    }
+
+    // Restore original buytime
+    if (mpBuyTimeCvar_ && savedBuyTime_ > 0.0f) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.0f", savedBuyTime_);
+        g_engfuncs.pfnCvar_DirectSet(mpBuyTimeCvar_, buf);
+    }
+
+    // End freezetime
+    if (GetGameRules()) {
+        GetGameRules()->m_bFreezePeriod = FALSE;
+    }
+
     paused_ = false;
     techPaused_ = false;
+    pauseRequested_ = false;
+    pauseDuration_ = 0;
     techUnpauseVotes_.clear();
-    CancelTask("pause");
-    ServerCommand("pausable 0\n");
+
     Broadcast("[XMP] Match unpaused.\n");
 }
 
@@ -1520,8 +1626,16 @@ void Plugin::FinishMatch()
     }
 }
 
-bool Plugin::DispatchCommand(edict_t *entity, const std::string &raw)
+bool Plugin::DispatchCommand(edict_t *entity, std::string raw)
 {
+    // Trim leading whitespace — some engine builds include it in pfnCmd_Args()
+    const auto first = raw.find_first_not_of(" \t\r\n\"");
+    if (first == std::string::npos) {
+        return false;
+    }
+    if (first > 0) {
+        raw = raw.substr(first);
+    }
     if (raw.empty()) {
         return false;
     }
@@ -1563,7 +1677,20 @@ bool Plugin::DispatchPlayerCommand(edict_t *entity, const std::string &command)
             Say(entity, "[XMP] Can only set team name before the match starts.\n");
             return true;
         }
-        const std::string name = (normalized.size() > 9) ? normalized.substr(9) : "";
+        // Extract name after "teamname " prefix, skipping any extra whitespace
+        const std::string prefix = "teamname ";
+        std::string name;
+        if (normalized.size() > prefix.size()) {
+            name = normalized.substr(prefix.size());
+            // Strip leading/trailing whitespace from the name itself
+            const auto first = name.find_first_not_of(" \t\r\n\"");
+            const auto last = name.find_last_not_of(" \t\r\n\"");
+            if (first != std::string::npos) {
+                name = name.substr(first, last - first + 1);
+            } else {
+                name.clear();
+            }
+        }
         if (name.empty() || name.length() > 32) {
             Say(entity, "[XMP] Usage: .teamname <name> (max 32 characters).\n");
             return true;
@@ -1940,10 +2067,23 @@ void Plugin::OnRoundEnd(int winStatus)
 void Plugin::OnRoundRestart()
 {
     Log("OnRoundRestart");
+    if (pauseRequested_) {
+        ApplyPause();
+    }
+    if (paused_) {
+        // Re-apply pause state after round restart resets it
+        if (GetGameRules()) {
+            GetGameRules()->m_bFreezePeriod = TRUE;
+        }
+    }
 }
 
 void Plugin::OnRoundFreezeEnd()
 {
+    // If still paused, re-freeze to maintain the pause
+    if (paused_ && GetGameRules()) {
+        GetGameRules()->m_bFreezePeriod = TRUE;
+    }
 }
 
 bool Plugin::OnPlayerSpawnEquip(CBasePlayer *player, bool addDefault, bool equipGame)
