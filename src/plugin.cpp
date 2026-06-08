@@ -132,14 +132,6 @@ bool Plugin::OnClientCommand(edict_t *entity)
     }
 
     if (strcasecmp(cmd, "jointeam") == 0 && IsSideSwitchBlocked(state_)) {
-        // Allow jointeam commands during an active team swap. After the knife
-        // winner types .swap, sideSelectionPending_ becomes false but state_
-        // remains SideSelection while SwapTeams() sends jointeam commands to
-        // clients asynchronously. Those returning commands must be allowed
-        // through so the game DLL processes the team switch.
-        if (state_ == MatchState::SideSelection && !sideSelectionPending_) {
-            return false;
-        }
         Say(entity, "[XMP] Side switching is disabled while LIVE.\n");
         return true;
     }
@@ -176,8 +168,7 @@ bool Plugin::OnMessageBegin(int destination, int type, const float *origin, edic
     const bool pendingClassMenu = (message_.name == "VGUIMenu" || message_.name == "ShowMenu") &&
         IsConnectedPlayerIndex(targetIndex) && players_[targetIndex].pendingClassSlot > 0;
     suppressCurrentMessage_ = pendingClassMenu ||
-        (message_.name == "TeamScore" && ShouldRewriteTeamScoreMessage() && !replayingScoreMessages_) ||
-        (message_.name == "TextMsg" && IsLiveState(state_));
+        (message_.name == "TeamScore" && ShouldRewriteTeamScoreMessage() && !replayingScoreMessages_);
     return suppressCurrentMessage_;
 }
 
@@ -844,7 +835,12 @@ void Plugin::HandleSideSelection(edict_t *entity, bool swapSides)
     if (swapSides) {
         Broadcast("[XMP] Knife winner chose to swap sides.\n");
         SwapTeams();
-        Schedule("post_swap_lo3", 2.1f, false, [this]() { StartLO3(MatchState::FirstHalf); });
+        // Start LO3 immediately. The jointeam commands from SwapTeams are sent
+        // to clients asynchronously and return as client commands on future
+        // frames. Changing state to StartingLO3 right away prevents them from
+        // being blocked by OnClientCommand's IsSideSwitchBlocked check
+        // (StartingLO3 is not in the blocked set).
+        StartLO3(MatchState::FirstHalf);
         return;
     } else {
         Broadcast("[XMP] Knife winner chose to stay.\n");
