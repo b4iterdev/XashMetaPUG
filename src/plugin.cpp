@@ -842,12 +842,7 @@ void Plugin::HandleSideSelection(edict_t *entity, bool swapSides)
     if (swapSides) {
         Broadcast("[XMP] Knife winner chose to swap sides.\n");
         SwapTeams();
-        // Start LO3 immediately (state changes to StartingLO3). This is necessary
-        // because SwapTeams sends "jointeam" commands to clients asynchronously;
-        // those commands return as client commands on future frames and would be
-        // blocked by OnClientCommand's IsSideSwitchBlocked check while we remain
-        // in SideSelection state. StartingLO3 is not in the blocked set.
-        StartLO3(MatchState::FirstHalf);
+        Schedule("post_swap_lo3", 2.1f, false, [this]() { StartLO3(MatchState::FirstHalf); });
         return;
     } else {
         Broadcast("[XMP] Knife winner chose to stay.\n");
