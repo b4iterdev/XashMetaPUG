@@ -1500,7 +1500,7 @@ bool Plugin::DispatchPlayerCommand(edict_t *entity, const std::string &command)
             Say(entity, "[XMP] Can only set team name before the match starts.\n");
             return true;
         }
-        const std::string name = (normalized.size() > 10) ? normalized.substr(10) : "";
+        const std::string name = (normalized.size() > 9) ? normalized.substr(9) : "";
         if (name.empty() || name.length() > 32) {
             Say(entity, "[XMP] Usage: .teamname <name> (max 32 characters).\n");
             return true;
