@@ -270,6 +270,7 @@ private:
     bool restoringScores_ = false;
     bool recording_ = false;
     bool techPaused_ = false;
+    bool halftimeScoresSaved_ = false;
     std::set<int> techUnpauseVotes_{};
     std::string teamAName_;
     std::string teamBName_;

@@ -378,6 +378,7 @@ void Plugin::ResetMatch(bool keepWarmup)
     lastObservedCTScore_ = 0;
     paused_ = false;
     techPaused_ = false;
+    halftimeScoresSaved_ = false;
     techUnpauseVotes_.clear();
     restarting_ = false;
     syncingScoreboard_ = false;
@@ -633,14 +634,14 @@ void Plugin::FinishLO3()
     RestoreKnifeRoundWeapons();
     SetState(pendingLiveState_);
     if (preservePlayerScores) {
-        // Save ScoreInfo so we can restore after sv_restart.
-        // For the SecondHalf LO3 this is already saved in EnterHalftime (before
-        // SwapTeams corrupted live players' frags/deaths), so skip here.
-        if (savedScoreInfo_[1].empty()) {
+        // For the SecondHalf LO3, scores were already saved in EnterHalftime
+        // (before SwapTeams corrupted live players' frags/deaths), so skip here.
+        if (!halftimeScoresSaved_) {
             for (int i = 1; i <= kMaxClients; ++i) {
                 savedScoreInfo_[i] = players_[i].scoreInfoValues;
             }
         }
+        halftimeScoresSaved_ = false;
         // sv_restart resets positions, inventory, and world state (like a normal LO3)
         // — mp_startmoney 800 was set by ApplyLiveStateRules, so players spawn with 800
         ServerCommand("sv_restart 1\n");
@@ -1488,6 +1489,7 @@ void Plugin::EnterHalftime()
     for (int i = 1; i <= kMaxClients; ++i) {
         savedScoreInfo_[i] = players_[i].scoreInfoValues;
     }
+    halftimeScoresSaved_ = true;
     SwapTeams();
     StartReady();
 }
