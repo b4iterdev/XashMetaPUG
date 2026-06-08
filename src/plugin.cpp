@@ -604,9 +604,13 @@ void Plugin::FinishLO3()
     RestoreKnifeRoundWeapons();
     SetState(pendingLiveState_);
     if (preservePlayerScores) {
-        // Save ScoreInfo so we can restore after sv_restart
-        for (int i = 1; i <= kMaxClients; ++i) {
-            savedScoreInfo_[i] = players_[i].scoreInfoValues;
+        // Save ScoreInfo so we can restore after sv_restart.
+        // For the SecondHalf LO3 this is already saved in EnterHalftime (before
+        // SwapTeams corrupted live players' frags/deaths), so skip here.
+        if (savedScoreInfo_[1].empty()) {
+            for (int i = 1; i <= kMaxClients; ++i) {
+                savedScoreInfo_[i] = players_[i].scoreInfoValues;
+            }
         }
         // sv_restart resets positions, inventory, and world state (like a normal LO3)
         // — mp_startmoney 800 was set by ApplyLiveStateRules, so players spawn with 800
@@ -1398,6 +1402,12 @@ void Plugin::EnterHalftime()
     Broadcast("[XMP] Halftime. Score T %d - CT %d. Swap sides and type .ready.\n", terroristScore_, ctScore_);
     SwapSideScores();
     SyncDisplayedTeamScoresFromMatchScores(true);
+    // Save player scores BEFORE SwapTeams kills alive players on team change.
+    // Swap kills give +1 death and -1 frag — we preserve pre-swap values so the
+    // LO3 restore later uses good scores, not the corrupted post-swap ones.
+    for (int i = 1; i <= kMaxClients; ++i) {
+        savedScoreInfo_[i] = players_[i].scoreInfoValues;
+    }
     SwapTeams();
     StartReady();
 }
