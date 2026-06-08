@@ -523,12 +523,12 @@ void Plugin::StartLO3(MatchState liveState)
         if (lo3Step_ <= 2) {
             Broadcast("[XMP] Live on three restart %d/2.\n", lo3Step_);
             if (!preservePlayerScores) {
-                ServerCommand("sv_restart 1\n");
+                ServerCommand(lo3Step_ == 1 ? "sv_restart 1\n" : "sv_restart 3\n");
             }
         }
         if (lo3Step_ >= 2) {
             CancelTask("lo3");
-            Schedule("lo3_finish", 2.0f, false, [this]() { FinishLO3(); });
+            Schedule("lo3_finish", 3.0f, false, [this]() { FinishLO3(); });
         }
     });
 }
@@ -590,7 +590,8 @@ void Plugin::FinishLO3()
             });
         });
     } else {
-        ServerCommand("sv_restart 3\n");
+        // LO3 schedule already ran sv_restart 3 at 2.0s. lo3_finish fires
+        // 3s later at 5.0s, matching the restart completion timing.
     }
     ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
     if (!preservePlayerScores) {
