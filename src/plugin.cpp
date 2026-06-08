@@ -330,6 +330,10 @@ void Plugin::ResetMatch(bool keepWarmup)
     syncingScoreboard_ = false;
     knifeRoundCompleted_ = false;
     sideSelectionPending_ = false;
+    if (recording_) {
+        ServerCommand("stoprecording\n");
+        recording_ = false;
+    }
     knifeWinner_ = Team::Unknown;
     state_ = keepWarmup ? MatchState::Warmup : MatchState::Disabled;
 }
@@ -596,6 +600,14 @@ void Plugin::FinishLO3()
     KillRandomPlayer();
     ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
     if (!preservePlayerScores) {
+        if (!recording_) {
+            char demoName[128];
+            const std::time_t now = std::time(nullptr);
+            std::strftime(demoName, sizeof(demoName), "xmp_%Y%m%d_%H%M%S", std::localtime(&now));
+            ServerCommand("record %s\n", demoName);
+            recording_ = true;
+            Log("[XMP] Started demo recording: %s\n", demoName);
+        }
         SyncDisplayedTeamScoresFromMatchScores(true);
         // Clear ScoreInfo cache so halftime practice kills don't replay on the LIVE scoreboard
         for (int i = 1; i <= kMaxClients; ++i) {
@@ -1331,6 +1343,11 @@ void Plugin::EnterOvertime()
 void Plugin::FinishMatch()
 {
     SetState(MatchState::Finished);
+    if (recording_) {
+        ServerCommand("stoprecording\n");
+        recording_ = false;
+        Log("[XMP] Stopped demo recording.\n");
+    }
     ServerCommand("mp_timelimit 0.1\n");
     if (terroristScore_ == ctScore_) {
         Broadcast("[XMP] Match finished tied: %d-%d.\n", terroristScore_, ctScore_);
