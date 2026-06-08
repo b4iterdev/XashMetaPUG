@@ -168,7 +168,8 @@ bool Plugin::OnMessageBegin(int destination, int type, const float *origin, edic
     const bool pendingClassMenu = (message_.name == "VGUIMenu" || message_.name == "ShowMenu") &&
         IsConnectedPlayerIndex(targetIndex) && players_[targetIndex].pendingClassSlot > 0;
     suppressCurrentMessage_ = pendingClassMenu ||
-        (message_.name == "TeamScore" && ShouldRewriteTeamScoreMessage() && !replayingScoreMessages_);
+        (message_.name == "TeamScore" && ShouldRewriteTeamScoreMessage() && !replayingScoreMessages_) ||
+        (message_.name == "TextMsg" && state_ == MatchState::StartingLO3);
     return suppressCurrentMessage_;
 }
 
