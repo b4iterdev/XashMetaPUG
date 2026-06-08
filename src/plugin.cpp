@@ -706,20 +706,24 @@ void Plugin::AssignRandomModelForTeam(edict_t *entity, Team team)
 
 void Plugin::KillRandomPlayer()
 {
-    std::vector<edict_t *> candidates;
+    std::vector<edict_t *> alive;
     for (int i = 1; i <= kMaxClients; ++i) {
         if (!players_[i].connected) continue;
         edict_t *entity = INDEXENT(i);
         if (FNullEnt(entity)) continue;
-        candidates.push_back(entity);
+        if (entity->v.health > 0 && entity->v.deadflag == DEAD_NO) {
+            alive.push_back(entity);
+        }
     }
-    if (candidates.empty()) {
+    if (alive.empty()) {
         return;
     }
-    edict_t *victim = candidates[std::rand() % candidates.size()];
-    victim->v.health = 0;
-    victim->v.deadflag = DEAD_DEAD;
-    Log("[XMP] Triggered entvars kill on player #%d to pre-fire #Game_Commencing.\n", PlayerIndex(victim));
+    edict_t *victim = alive[std::rand() % alive.size()];
+    CBasePlayer *player = CBasePlayer::Instance(victim);
+    if (player) {
+        player->TakeDamage(&victim->v, &victim->v, 1000.0f, DMG_GENERIC);
+        Log("[XMP] Triggered TakeDamage kill on player #%d to pre-fire #Game_Commencing.\n", PlayerIndex(victim));
+    }
 }
 
 int Plugin::RandomClassSlotForTeam(Team team) const
