@@ -193,7 +193,6 @@ private:
     void EnforceKnifeRoundWeapons(bool announce = true);
     void StripKnifeRoundWeapons();
     void RestoreKnifeRoundWeapons();
-    void KillRandomPlayer();
     edict_t *CreateNamedEntity(const char *classname) const;
     bool StripPlayerWeaponsNative(edict_t *entity) const;
     bool GiveItemNative(edict_t *entity, const char *classname) const;

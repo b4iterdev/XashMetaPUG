@@ -524,17 +524,10 @@ void Plugin::StartLO3(MatchState liveState)
             Broadcast("[XMP] Live on three restart %d/2.\n", lo3Step_);
             if (!preservePlayerScores) {
                 ServerCommand("sv_restart 1\n");
-                if (lo3Step_ == 1) {
-                    // Kill a random player during the LO3 window to pre-trigger
-                    // #Game_Commencing before the 2nd sv_restart, preventing it
-                    // from appearing during the live match.
-                    Schedule("lo3_trigger", 0.3f, false, [this]() { KillRandomPlayer(); });
-                }
             }
         }
         if (lo3Step_ >= 2) {
             CancelTask("lo3");
-            CancelTask("lo3_trigger");
             Schedule("lo3_finish", 2.0f, false, [this]() { FinishLO3(); });
         }
     });
@@ -702,25 +695,6 @@ void Plugin::AssignRandomModelForTeam(edict_t *entity, Team team)
         const int count = static_cast<int>(sizeof(kCTModels) / sizeof(kCTModels[0]));
         player->m_iModelName = kCTModels[std::rand() % count];
     }
-}
-
-void Plugin::KillRandomPlayer()
-{
-    std::vector<edict_t *> alive;
-    for (int i = 1; i <= kMaxClients; ++i) {
-        if (!players_[i].connected) continue;
-        edict_t *entity = INDEXENT(i);
-        if (FNullEnt(entity)) continue;
-        if (entity->v.health > 0 && entity->v.deadflag == DEAD_NO) {
-            alive.push_back(entity);
-        }
-    }
-    if (alive.empty()) {
-        return;
-    }
-    edict_t *victim = alive[std::rand() % alive.size()];
-    g_engfuncs.pfnClientCommand(victim, "kill\n");
-    Log("[XMP] Triggered kill on random player to pre-fire #Game_Commencing.\n");
 }
 
 int Plugin::RandomClassSlotForTeam(Team team) const
