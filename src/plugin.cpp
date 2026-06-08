@@ -176,7 +176,8 @@ bool Plugin::OnMessageBegin(int destination, int type, const float *origin, edic
     const bool pendingClassMenu = (message_.name == "VGUIMenu" || message_.name == "ShowMenu") &&
         IsConnectedPlayerIndex(targetIndex) && players_[targetIndex].pendingClassSlot > 0;
     suppressCurrentMessage_ = pendingClassMenu ||
-        (message_.name == "TeamScore" && ShouldRewriteTeamScoreMessage() && !replayingScoreMessages_);
+        (message_.name == "TeamScore" && ShouldRewriteTeamScoreMessage() && !replayingScoreMessages_) ||
+        (message_.name == "TextMsg" && IsLiveState(state_));
     return suppressCurrentMessage_;
 }
 
@@ -209,10 +210,12 @@ bool Plugin::OnWriteString(const char *value) {
             ResetMatch(true);
             SetState(MatchState::Warmup);
         } else {
-            // Suppress the message during all other states so the "Game Commencing"
-            // HUD text does not appear on players' screens mid-match or during
-            // round transitions.
-            suppressCurrentMessage_ = true;
+            // Game Commencing is suppressed at the OnMessageBegin level for
+            // live states (see OnMessageBegin). The write-level suppression
+            // is intentionally not used here: setting suppressCurrentMessage_
+            // mid-message would leave the engine's message state machine in
+            // an inconsistent state, causing "pfnMessageBegin: New message
+            // started when msg 'TextMsg' has not been sent yet" crashes.
         }
     }
     return suppressCurrentMessage_;
