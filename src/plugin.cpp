@@ -653,7 +653,12 @@ void Plugin::FinishLO3()
         // LO3 schedule already ran sv_restart 3 at 2.0s. lo3_finish fires
         // 3s later at 5.0s, matching the restart completion timing.
     }
-    KillRandomPlayer();
+    // Kill a random player on first-half LIVE to work around #Game_Commencing
+    // locking the scoreboard for the next 30 seconds. Not needed on second half
+    // (swap already reset positions) and avoids penalizing a player for it.
+    if (!preservePlayerScores) {
+        KillRandomPlayer();
+    }
     ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
     g_engfuncs.pfnMessageBegin(MSG_ALL, GET_USER_MSG_ID(PLID, "TextMsg", nullptr), nullptr, nullptr);
     g_engfuncs.pfnWriteByte(HUD_PRINTCENTER);
