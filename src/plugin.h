@@ -92,6 +92,7 @@ struct Cvars {
     cvar_t overtimeFirstTo{};
     cvar_t lo3Enabled{};
     cvar_t pauseTime{};
+    cvar_t timeoutTime{};
     cvar_t votePercent{};
     cvar_t cfgWarmup{};
     cvar_t cfgLive{};
@@ -160,6 +161,8 @@ private:
     void RestartMatch();
     void PauseMatch();
     void UnpauseMatch();
+    void TimeoutMatch();
+    void TechTimeout();
     void SwapTeams();
     void AssignRandomModelForTeam(edict_t *entity, Team team);
     int RandomClassSlotForTeam(Team team) const;
@@ -266,6 +269,8 @@ private:
     bool knifeRoundWeaponsEnforced_ = false;
     bool restoringScores_ = false;
     bool recording_ = false;
+    bool techPaused_ = false;
+    std::set<int> techUnpauseVotes_{};
     std::string teamAName_;
     std::string teamBName_;
     Team knifeWinner_ = Team::Unknown;

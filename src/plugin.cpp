@@ -71,6 +71,14 @@ void Plugin::OnMetaAttach()
         GetPlugin().LoadAdmins();
         g_engfuncs.pfnServerPrint("Admin list reloaded.\n");
     });
+    g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_timeout"), []() {
+        GetPlugin().Log("xmp_timeout executed from server console");
+        GetPlugin().TimeoutMatch();
+    });
+    g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_tech"), []() {
+        GetPlugin().Log("xmp_tech executed from server console");
+        GetPlugin().TechTimeout();
+    });
     Log("XashMetaPUG attached");
 }
 
@@ -308,6 +316,7 @@ void Plugin::RegisterCvars()
     RegisterCvar(cvars_.overtimeFirstTo, "xmp_overtime_first_to", "4");
     RegisterCvar(cvars_.lo3Enabled, "xmp_lo3_enabled", "1");
     RegisterCvar(cvars_.pauseTime, "xmp_pause_time", "60");
+    RegisterCvar(cvars_.timeoutTime, "xmp_timeout_time", "30");
     RegisterCvar(cvars_.votePercent, "xmp_vote_percent", "0.70");
     RegisterCvar(cvars_.cfgWarmup, "xmp_cfg_warmup", "addons/xashmetapug/cfg/warmup.cfg");
     RegisterCvar(cvars_.cfgLive, "xmp_cfg_live", "addons/xashmetapug/cfg/live.cfg");
@@ -368,6 +377,8 @@ void Plugin::ResetMatch(bool keepWarmup)
     lastObservedTScore_ = 0;
     lastObservedCTScore_ = 0;
     paused_ = false;
+    techPaused_ = false;
+    techUnpauseVotes_.clear();
     restarting_ = false;
     syncingScoreboard_ = false;
     knifeRoundCompleted_ = false;
@@ -453,7 +464,7 @@ void Plugin::ApplyPracticeStateRules()
         const char *stateHint = (state_ == MatchState::HalfTime)
             ? "Halftime — swap sides completed."
             : "Warmup";
-        Broadcast("[XMP] %s Commands: .ready .notready .teamname .status .help. "
+        Broadcast("[XMP] %s Commands: .ready .notready .teamname .timeout .tech .unpause .status .help. "
                   "Ready %d/%d — type .ready to start.\n",
                   stateHint, readyCount, requiredCount);
     });
@@ -743,9 +754,46 @@ void Plugin::PauseMatch()
         return;
     }
     paused_ = true;
+    techPaused_ = false;
+    techUnpauseVotes_.clear();
     Broadcast("[XMP] Match paused for %.0f seconds.\n", CvarFloat(cvars_.pauseTime));
     ServerCommand("pausable 1\n");
     Schedule("pause", CvarFloat(cvars_.pauseTime), false, [this]() { UnpauseMatch(); });
+}
+
+void Plugin::TimeoutMatch()
+{
+    if (paused_) {
+        Broadcast("[XMP] Match is already paused.\n");
+        return;
+    }
+    if (!IsLiveState(state_)) {
+        Broadcast("[XMP] Timeout can only be called during a live match.\n");
+        return;
+    }
+    paused_ = true;
+    techPaused_ = false;
+    techUnpauseVotes_.clear();
+    Broadcast("[XMP] Timeout called — match paused for %.0f seconds.\n", CvarFloat(cvars_.timeoutTime));
+    ServerCommand("pausable 1\n");
+    Schedule("pause", CvarFloat(cvars_.timeoutTime), false, [this]() { UnpauseMatch(); });
+}
+
+void Plugin::TechTimeout()
+{
+    if (paused_) {
+        Broadcast("[XMP] Match is already paused.\n");
+        return;
+    }
+    if (!IsLiveState(state_)) {
+        Broadcast("[XMP] Technical timeout can only be called during a live match.\n");
+        return;
+    }
+    paused_ = true;
+    techPaused_ = true;
+    techUnpauseVotes_.clear();
+    Broadcast("[XMP] Technical timeout called. Match paused until both teams .unpause.\n");
+    ServerCommand("pausable 1\n");
 }
 
 void Plugin::UnpauseMatch()
@@ -754,6 +802,8 @@ void Plugin::UnpauseMatch()
         return;
     }
     paused_ = false;
+    techPaused_ = false;
+    techUnpauseVotes_.clear();
     CancelTask("pause");
     ServerCommand("pausable 0\n");
     Broadcast("[XMP] Match unpaused.\n");
@@ -1530,7 +1580,44 @@ bool Plugin::DispatchPlayerCommand(edict_t *entity, const std::string &command)
     } else if (normalized == "score") {
         Say(entity, "[XMP] Score T %d - CT %d. Round %d/%d.\n", terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
     } else if (normalized == "help") {
-        Say(entity, "[XMP] Commands: .ready .notready .teamname .status .score .help\n");
+        Say(entity, "[XMP] Commands: .ready .notready .teamname .timeout .tech .unpause .status .score .help\n");
+    } else if (normalized == "timeout") {
+        if (!IsLiveState(state_)) {
+            Say(entity, "[XMP] Timeout is only available during a live match.\n");
+            return true;
+        }
+        TimeoutMatch();
+    } else if (normalized == "tech") {
+        if (!IsLiveState(state_)) {
+            Say(entity, "[XMP] Technical timeout is only available during a live match.\n");
+            return true;
+        }
+        TechTimeout();
+    } else if (normalized == "unpause") {
+        if (techPaused_) {
+            const int index = PlayerIndex(entity);
+            if (!IsConnectedPlayerIndex(index)) return true;
+            if (players_[index].team != Team::Terrorist && players_[index].team != Team::CounterTerrorist) {
+                Say(entity, "[XMP] You must be on T or CT to vote to unpause.\n");
+                return true;
+            }
+            techUnpauseVotes_.insert(index);
+            bool teamT = false, teamCT = false;
+            for (int idx : techUnpauseVotes_) {
+                if (players_[idx].team == Team::Terrorist) teamT = true;
+                if (players_[idx].team == Team::CounterTerrorist) teamCT = true;
+            }
+            Say(entity, "[XMP] Unpause vote registered (%s). %s both teams voted.\n",
+                (players_[index].team == Team::Terrorist) ? "T" : "CT",
+                (teamT && teamCT) ? "Unpausing —" : "Waiting for");
+            if (teamT && teamCT) {
+                UnpauseMatch();
+            }
+        } else if (paused_) {
+            Say(entity, "[XMP] Match is paused for a timed timeout. Wait for the timer or ask an admin to !unpause.\n");
+        } else {
+            Say(entity, "[XMP] Match is not paused.\n");
+        }
     } else {
         return false;
     }
@@ -1582,6 +1669,7 @@ bool Plugin::IsPracticeState(MatchState state) const
 
 bool Plugin::IsSideSwitchBlocked(MatchState state) const
 {
+    if (techPaused_) return false;  // Allow team changes during tech timeout
     return IsLiveState(state) || state == MatchState::KnifeRound || state == MatchState::SideSelection;
 }
 
