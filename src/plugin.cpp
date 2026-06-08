@@ -421,6 +421,7 @@ bool Plugin::ExecuteConfigFile(const std::string &path)
 void Plugin::ApplyStateRules(MatchState state)
 {
     CancelTask("practice_enforce");
+    CancelTask("reminder");
 
     if (IsPracticeState(state)) {
         ApplyPracticeStateRules();
@@ -446,6 +447,16 @@ void Plugin::ApplyPracticeStateRules()
     ServerCommand("mp_give_player_c4 0\n");
     EnforcePracticeStatePlayers();
     Schedule("practice_enforce", 1.0f, true, [this]() { EnforcePracticeStatePlayers(); });
+    Schedule("reminder", 30.0f, true, [this]() {
+        int readyCount = ReadyPlayers();
+        int requiredCount = GetRequiredReadyCount();
+        const char *stateHint = (state_ == MatchState::HalfTime)
+            ? "Halftime — swap sides completed."
+            : "Warmup";
+        Broadcast("[XMP] %s Commands: .ready .notready .teamname .status .help. "
+                  "Ready %d/%d — type .ready to start.\n",
+                  stateHint, readyCount, requiredCount);
+    });
 }
 
 void Plugin::ApplyKnifeRoundStateRules()
