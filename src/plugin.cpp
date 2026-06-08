@@ -555,12 +555,19 @@ void Plugin::StartKnifeRound()
     SetState(MatchState::KnifeRound);
     EnforceKnifeRoundWeapons();
     Broadcast("[XMP] Knife round starting. Winner chooses side with .stay or .swap.\n");
-    g_engfuncs.pfnMessageBegin(MSG_ALL, GET_USER_MSG_ID(PLID, "TextMsg", nullptr), nullptr, nullptr);
-    g_engfuncs.pfnWriteByte(HUD_PRINTCENTER);
-    g_engfuncs.pfnWriteString("KNIFE! KNIFE! KNIFE!");
-    g_engfuncs.pfnMessageEnd();
     ServerCommand("sv_restart 1\n");
     Schedule("knife_strip", 1.5f, false, [this]() { StripKnifeRoundWeapons(); });
+    // Show KNIFE center-screen after the restart settles. Repeat a few times
+    // so players don't miss it (sv_restart clears HUD on restart).
+    const auto showKnifeMsg = [this]() {
+        g_engfuncs.pfnMessageBegin(MSG_ALL, GET_USER_MSG_ID(PLID, "TextMsg", nullptr), nullptr, nullptr);
+        g_engfuncs.pfnWriteByte(HUD_PRINTCENTER);
+        g_engfuncs.pfnWriteString("=== KNIFE! KNIFE! KNIFE! ===");
+        g_engfuncs.pfnMessageEnd();
+    };
+    Schedule("knife_center_msg_1", 0.5f, false, showKnifeMsg);
+    Schedule("knife_center_msg_2", 1.5f, false, showKnifeMsg);
+    Schedule("knife_center_msg_3", 2.5f, false, showKnifeMsg);
 }
 
 void Plugin::StartLO3(MatchState liveState)
@@ -660,10 +667,17 @@ void Plugin::FinishLO3()
         KillRandomPlayer();
     }
     ServerCommand("say \"[XMP] LIVE LIVE LIVE!\"\n");
-    g_engfuncs.pfnMessageBegin(MSG_ALL, GET_USER_MSG_ID(PLID, "TextMsg", nullptr), nullptr, nullptr);
-    g_engfuncs.pfnWriteByte(HUD_PRINTCENTER);
-    g_engfuncs.pfnWriteString("LIVE! LIVE! LIVE!");
-    g_engfuncs.pfnMessageEnd();
+    // Show LIVE center-screen, repeated so it persists on screen (other HUD
+    // messages from round start may overwrite a single send).
+    const auto showLiveMsg = [this]() {
+        g_engfuncs.pfnMessageBegin(MSG_ALL, GET_USER_MSG_ID(PLID, "TextMsg", nullptr), nullptr, nullptr);
+        g_engfuncs.pfnWriteByte(HUD_PRINTCENTER);
+        g_engfuncs.pfnWriteString("=== LIVE! LIVE! LIVE! ===");
+        g_engfuncs.pfnMessageEnd();
+    };
+    showLiveMsg();
+    Schedule("live_center_msg_1", 1.0f, false, showLiveMsg);
+    Schedule("live_center_msg_2", 2.0f, false, showLiveMsg);
     if (!preservePlayerScores) {
         if (!recording_) {
             char demoName[128];
