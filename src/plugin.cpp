@@ -1776,7 +1776,13 @@ void Plugin::Broadcast(const char *format, ...) const
     va_start(args, format);
     vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
-    Say(nullptr, "%s", buffer);
+    // Use ServerCommand say so the message appears in the chat box alongside
+    // regular player chat (pfnClientPrintf with print_chat may render differently
+    // in some Xash3D builds).
+    for (char *p = buffer; *p; ++p) {
+        if (*p == '"') *p = '\'';  // Escape quotes for the say command wrapper
+    }
+    ServerCommand("say \"%s\"\n", buffer);
     Log("%s", buffer);
 }
 
