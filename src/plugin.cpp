@@ -132,6 +132,14 @@ bool Plugin::OnClientCommand(edict_t *entity)
     }
 
     if (strcasecmp(cmd, "jointeam") == 0 && IsSideSwitchBlocked(state_)) {
+        // Allow jointeam commands during an active team swap. After the knife
+        // winner types .swap, sideSelectionPending_ becomes false but state_
+        // remains SideSelection while SwapTeams() sends jointeam commands to
+        // clients asynchronously. Those returning commands must be allowed
+        // through so the game DLL processes the team switch.
+        if (state_ == MatchState::SideSelection && !sideSelectionPending_) {
+            return false;
+        }
         Say(entity, "[XMP] Side switching is disabled while LIVE.\n");
         return true;
     }
@@ -201,7 +209,10 @@ bool Plugin::OnWriteString(const char *value) {
             ResetMatch(true);
             SetState(MatchState::Warmup);
         } else {
-            Log("Detected Game Commencing while in state %s, ignoring (mid-match/round).", StateName(state_));
+            // Suppress the message during all other states so the "Game Commencing"
+            // HUD text does not appear on players' screens mid-match or during
+            // round transitions.
+            suppressCurrentMessage_ = true;
         }
     }
     return suppressCurrentMessage_;
@@ -768,28 +779,16 @@ void Plugin::HandleRoundScore(Team team, int score)
         return;
     }
 
-    bool increment = false;
-    if (team == Team::Terrorist && score > lastObservedTScore_) {
-        terroristScore_ += score - lastObservedTScore_;
-        increment = true;
-    } else if (team == Team::CounterTerrorist && score > lastObservedCTScore_) {
-        ctScore_ += score - lastObservedCTScore_;
-        increment = true;
-    }
-
-    if (team == Team::Terrorist) lastObservedTScore_ = score;
-    if (team == Team::CounterTerrorist) lastObservedCTScore_ = score;
-
-    if (increment) {
-        this->restarting_ = false;
-        ++halfRoundCount_;
-        ++totalRoundCount_;
-        if (state_ == MatchState::Overtime) {
-            ++overtimeRoundCount_;
-        }
-        SetDisplayedTeamScore(team, team == Team::Terrorist ? terroristScore_ : ctScore_, true);
-        Broadcast("[XMP] Score T %d - CT %d. Round %d/%d.\n", terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
-        EvaluateMatchProgress();
+    // In live states, OnRoundEnd (ReGameDLL hook) is the authoritative score
+    // tracker. The TeamScore interception only updates the displayed score
+    // on the client scoreboard and tracks lastObserved for consistency.
+    this->restarting_ = false;
+    if (team == Team::Terrorist) {
+        lastObservedTScore_ = score;
+        SetDisplayedTeamScore(team, terroristScore_, true);
+    } else if (team == Team::CounterTerrorist) {
+        lastObservedCTScore_ = score;
+        SetDisplayedTeamScore(team, ctScore_, true);
     }
 }
 
@@ -1655,6 +1654,8 @@ void Plugin::OnRoundEnd(int winStatus)
     } else {
         return;
     }
+
+    this->restarting_ = false;
 
     Broadcast("[XMP] Score T %d - CT %d. Round %d/%d.\n",
               terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
