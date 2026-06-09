@@ -81,7 +81,7 @@ plugin_info_t Plugin_info = {
     "0.1.0",
     __DATE__,
     "b4iterdev/Sisyphus",
-    "https://github.com/local/XashMetaPUG",
+    "https://github.com/b4iterdev/XashMetaPUG",
     "XMP",
     PT_STARTUP,
     PT_ANYTIME,
