@@ -1683,16 +1683,17 @@ bool Plugin::DispatchPlayerCommand(edict_t *entity, const std::string &command)
                 teamAName_.empty() ? "T" : teamAName_.c_str(),
                 teamBName_.empty() ? "CT" : teamBName_.c_str());
         }
-    } else if (normalized == "teamname" || normalized.rfind("teamname ", 0) == 0) {
+    } else if (normalized == "teamname" || command.rfind("teamname ", 0) == 0) {
         if (state_ != MatchState::Warmup && state_ != MatchState::WaitingReady && state_ != MatchState::HalfTime) {
             Say(entity, "[XMP] Can only set team name before the match starts.\n");
             return true;
         }
         // Extract name after "teamname " prefix, skipping any extra whitespace
+        // Use `command` (not `normalized`) because TrimCommand discards arguments
         const std::string prefix = "teamname ";
         std::string name;
-        if (normalized.size() > prefix.size()) {
-            name = normalized.substr(prefix.size());
+        if (command.size() > prefix.size() && command.rfind(prefix, 0) == 0) {
+            name = command.substr(prefix.size());
             // Strip leading/trailing whitespace from the name itself
             const auto first = name.find_first_not_of(" \t\r\n\"");
             const auto last = name.find_last_not_of(" \t\r\n\"");
