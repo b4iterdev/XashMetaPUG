@@ -73,8 +73,10 @@ void Plugin::OnMetaAttach()
         Plugin &p = GetPlugin();
         p.Log("xmp_score executed from server console");
         char buf[128];
-        std::snprintf(buf, sizeof(buf), "Score T %d - CT %d. Round %d/%d.\n",
-                      p.terroristScore_, p.ctScore_, p.totalRoundCount_, p.CvarInt(p.cvars_.matchRounds));
+        const char *tDisp = p.teamAName_.empty() ? "T" : p.teamAName_.c_str();
+        const char *ctDisp = p.teamBName_.empty() ? "CT" : p.teamBName_.c_str();
+        std::snprintf(buf, sizeof(buf), "Score %s %d - %s %d. Round %d/%d.\n",
+                       tDisp, p.terroristScore_, ctDisp, p.ctScore_, p.totalRoundCount_, p.CvarInt(p.cvars_.matchRounds));
         g_engfuncs.pfnServerPrint(buf);
     });
     g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_reload"), []() {
@@ -1588,7 +1590,9 @@ void Plugin::EnterHalftime()
     halfRoundCount_ = 0;
     pendingLiveState_ = MatchState::SecondHalf;
     SetState(MatchState::HalfTime);
-    Broadcast("[XMP] Halftime. Score T %d - CT %d. Swap sides and type .ready.\n", terroristScore_, ctScore_);
+    const char *tDisp = teamAName_.empty() ? "T" : teamAName_.c_str();
+    const char *ctDisp = teamBName_.empty() ? "CT" : teamBName_.c_str();
+    Broadcast("[XMP] Halftime. Score %s %d - %s %d. Swap sides and type .ready.\n", tDisp, terroristScore_, ctDisp, ctScore_);
     SwapSideScores();
     SyncDisplayedTeamScoresFromMatchScores(true);
     // Save player scores BEFORE SwapTeams kills alive players on team change.
@@ -1723,7 +1727,9 @@ bool Plugin::DispatchPlayerCommand(edict_t *entity, const std::string &command)
             Say(entity, "[XMP] You must be on a team (T or CT) to set a team name.\n");
         }
     } else if (normalized == "score") {
-        Say(entity, "[XMP] Score T %d - CT %d. Round %d/%d.\n", terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
+            const char *tDisp = teamAName_.empty() ? "T" : teamAName_.c_str();
+            const char *ctDisp = teamBName_.empty() ? "CT" : teamBName_.c_str();
+            Say(entity, "[XMP] Score %s %d - %s %d. Round %d/%d.\n", tDisp, terroristScore_, ctDisp, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
     } else if (normalized == "help") {
         Say(entity, "[XMP] Commands: .ready .notready .teamname .timeout .tech .unpause .status .score .help\n");
     } else if (normalized == "timeout") {
@@ -1790,7 +1796,11 @@ bool Plugin::DispatchAdminCommand(edict_t *entity, const std::string &command)
             SwapTeams();
         }
     }
-    else if (normalized == "score") Broadcast("[XMP] Score T %d - CT %d. Round %d/%d.\n", terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
+    else if (normalized == "score") {
+        const char *tDisp = teamAName_.empty() ? "T" : teamAName_.c_str();
+        const char *ctDisp = teamBName_.empty() ? "CT" : teamBName_.c_str();
+        Broadcast("[XMP] Score %s %d - %s %d. Round %d/%d.\n", tDisp, terroristScore_, ctDisp, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
+    }
     else if (normalized == "reload") { LoadAdmins(); Broadcast("[XMP] Admin list reloaded.\n"); }
     else return false;
     return true;
@@ -2075,8 +2085,10 @@ void Plugin::OnRoundEnd(int winStatus)
 
     this->restarting_ = false;
 
-    Broadcast("[XMP] Score T %d - CT %d. Round %d/%d.\n",
-              terroristScore_, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
+    const char *tDisp = teamAName_.empty() ? "T" : teamAName_.c_str();
+    const char *ctDisp = teamBName_.empty() ? "CT" : teamBName_.c_str();
+    Broadcast("[XMP] Score %s %d - %s %d. Round %d/%d.\n",
+              tDisp, terroristScore_, ctDisp, ctScore_, totalRoundCount_, CvarInt(cvars_.matchRounds));
     EvaluateMatchProgress();
 }
 
