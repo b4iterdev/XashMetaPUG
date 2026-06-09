@@ -150,10 +150,18 @@ void Plugin::OnStartFrame()
         }
     }
 
-    // Safety: keep the round frozen while paused
-    if (paused_ && GetGameRules() && !GetGameRules()->m_bFreezePeriod) {
-        GetGameRules()->m_bFreezePeriod = TRUE;
+    // Safety: keep the round frozen while paused.
+    // Reset both freeze and round-time every frame so the round never
+    // thaws and never expires by the round clock.
+    if (paused_ && GetGameRules()) {
+        if (!GetGameRules()->m_bFreezePeriod) {
+            GetGameRules()->m_bFreezePeriod = TRUE;
+        }
         GetGameRules()->m_fRoundStartTime = gpGlobals->time;
+        // Keep round time at pause-duration + buffer so the round clock
+        // HUD still shows a reasonable value.
+        GetGameRules()->m_iRoundTimeSecs = pauseDuration_ + 1;
+        GetGameRules()->m_iIntroRoundTime = pauseDuration_ + 1;
     }
 }
 
@@ -244,7 +252,7 @@ bool Plugin::OnMessageBegin(int destination, int type, const float *origin, edic
     const int targetIndex = PlayerIndex(entity);
     const bool pendingClassMenu = (message_.name == "VGUIMenu" || message_.name == "ShowMenu") &&
         IsConnectedPlayerIndex(targetIndex) && players_[targetIndex].pendingClassSlot > 0;
-    suppressCurrentMessage_ = pendingClassMenu ||
+    suppressCurrentMessage_ = pendingClassMenu || paused_ ||
         (message_.name == "TeamScore" && ShouldRewriteTeamScoreMessage() && !replayingScoreMessages_);
     return suppressCurrentMessage_;
 }
@@ -285,6 +293,11 @@ bool Plugin::OnWriteString(const char *value) {
             // an inconsistent state, causing "pfnMessageBegin: New message
             // started when msg 'TextMsg' has not been sent yet" crashes.
         }
+        // Non-ReGameDLL fallback: without OnRoundRestart, apply the pending
+        // pause here, triggered by the round-start TextMsg.
+        if (pauseRequested_) {
+            ApplyPause();
+        }
     }
     return suppressCurrentMessage_;
 }
@@ -297,6 +310,15 @@ bool Plugin::OnMessageEnd()
     }
 
     if (message_.name == "TextMsg") {
+        suppressCurrentMessage_ = false;
+        return suppressMessage;
+    }
+
+    // Block score tracking during pause — kills and round-score updates
+    // would otherwise advance match state while the match is supposed to
+    // be frozen.  The freeze-period enforcement also keeps the round
+    // locked, but engine-originated TeamScore messages can still arrive.
+    if (paused_) {
         suppressCurrentMessage_ = false;
         return suppressMessage;
     }
@@ -916,6 +938,11 @@ void Plugin::UnpauseMatch()
     pauseRequested_ = false;
     pauseDuration_ = 0;
     techUnpauseVotes_.clear();
+
+    // Restart the round so a fresh round starts with the restored
+    // mp_freezetime/mp_buytime values.  Without this the round would
+    // continue in the extended-freeze state.
+    ServerCommand("sv_restart 1\n");
 
     Broadcast("[XMP] Match unpaused.\n");
 }
