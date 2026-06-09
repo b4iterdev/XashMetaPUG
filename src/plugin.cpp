@@ -1720,9 +1720,15 @@ void Plugin::FinishMatch()
     }
     ServerCommand("mp_timelimit 0.1\n");
     if (terroristScore_ == ctScore_) {
-        Broadcast("[XMP] Match finished tied: %d-%d.\n", terroristScore_, ctScore_);
+        Broadcast("[XMP] Match finished tied: %s %d - %s %d.\n",
+                  teamAName_.empty() ? "T" : teamAName_.c_str(), terroristScore_,
+                  teamBName_.empty() ? "CT" : teamBName_.c_str(), ctScore_);
     } else {
-        Broadcast("[XMP] Match finished. Winner: %s (%d-%d).\n", terroristScore_ > ctScore_ ? "Terrorists" : "Counter-Terrorists", terroristScore_, ctScore_);
+        const bool tWins = terroristScore_ > ctScore_;
+        const char *winnerName = tWins
+            ? (teamAName_.empty() ? "Terrorists" : teamAName_.c_str())
+            : (teamBName_.empty() ? "Counter-Terrorists" : teamBName_.c_str());
+        Broadcast("[XMP] Match finished. Winner: %s (%d-%d).\n", winnerName, terroristScore_, ctScore_);
     }
 }
 
