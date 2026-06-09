@@ -746,9 +746,9 @@ void Plugin::FinishLO3()
                 return out.empty() ? "unknown" : out;
             };
             char fullName[256];
-            const char *tName = teamAName_.empty() ? "T" : sanitize(teamAName_).c_str();
-            const char *ctName = teamBName_.empty() ? "CT" : sanitize(teamBName_).c_str();
-            std::snprintf(fullName, sizeof(fullName), "%s_vs_%s_%s", tName, ctName, demoName);
+            const std::string tSanitized = teamAName_.empty() ? "T" : sanitize(teamAName_);
+            const std::string ctSanitized = teamBName_.empty() ? "CT" : sanitize(teamBName_);
+            std::snprintf(fullName, sizeof(fullName), "%s_vs_%s_%s", tSanitized.c_str(), ctSanitized.c_str(), demoName);
             ServerCommand("record %s\n", fullName);
             recording_ = true;
             Log("[XMP] Started demo recording: %s\n", fullName);
