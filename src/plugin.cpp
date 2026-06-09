@@ -215,8 +215,10 @@ bool Plugin::OnClientCommand(edict_t *entity)
             return false;
         }
         std::string raw(args);
+        Log("OnClientCommand(say): pfnCmd_Argv(0)='%s' pfnCmd_Args()=len=%zu \"%s\"", cmd, strlen(args), args);
         if (raw.size() >= 2 && raw.front() == '"' && raw.back() == '"') {
             raw = raw.substr(1, raw.size() - 2);
+            Log("OnClientCommand(say): stripped surrounding quotes -> \"%s\"", raw.c_str());
         }
         return DispatchCommand(entity, raw);
     }
@@ -1644,18 +1646,27 @@ bool Plugin::DispatchCommand(edict_t *entity, std::string raw)
     }
     const std::string adminPrefix = CvarString(cvars_.adminPrefix);
     const std::string playerPrefix = CvarString(cvars_.playerPrefix);
+    Log("DispatchCommand: raw=\"%s\" len=%zu adminPrefix=\"%s\" playerPrefix=\"%s\"",
+        raw.c_str(), raw.size(), adminPrefix.c_str(), playerPrefix.c_str());
     if (!adminPrefix.empty() && raw.rfind(adminPrefix, 0) == 0) {
-        return DispatchAdminCommand(entity, raw.substr(adminPrefix.size()));
+        std::string stripped = raw.substr(adminPrefix.size());
+        Log("DispatchCommand: admin prefix match, stripped=\"%s\"", stripped.c_str());
+        return DispatchAdminCommand(entity, stripped);
     }
     if (!playerPrefix.empty() && raw.rfind(playerPrefix, 0) == 0) {
-        return DispatchPlayerCommand(entity, raw.substr(playerPrefix.size()));
+        std::string stripped = raw.substr(playerPrefix.size());
+        Log("DispatchCommand: player prefix match, stripped=\"%s\"", stripped.c_str());
+        return DispatchPlayerCommand(entity, stripped);
     }
+    Log("DispatchCommand: no prefix match");
     return false;
 }
 
 bool Plugin::DispatchPlayerCommand(edict_t *entity, const std::string &command)
 {
     const std::string normalized = TrimCommand(command);
+    Log("DispatchPlayerCommand: input=\"%s\" normalized=\"%s\" len=%zu",
+        command.c_str(), normalized.c_str(), normalized.size());
     if (normalized == "ready") {
         SetReady(entity, true);
         CheckReady();
@@ -1691,6 +1702,10 @@ bool Plugin::DispatchPlayerCommand(edict_t *entity, const std::string &command)
                 name.clear();
             }
         }
+        Log("teamname: normalized=\"%s\" name_before_strip=\"%s\" name_after_strip=\"%s\"",
+            normalized.c_str(),
+            normalized.size() > prefix.size() ? normalized.substr(prefix.size()).c_str() : "<empty>",
+            name.c_str());
         if (name.empty() || name.length() > 32) {
             Say(entity, "[XMP] Usage: .teamname <name> (max 32 characters).\n");
             return true;
