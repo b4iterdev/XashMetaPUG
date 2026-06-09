@@ -1613,30 +1613,25 @@ void Plugin::EnterOvertime()
     overtimeTerroristStartScore_ = terroristScore_;
     overtimeCTStartScore_ = ctScore_;
     pendingLiveState_ = MatchState::Overtime;
-    SetState(MatchState::Overtime);
-    const int otRounds = CvarInt(cvars_.overtimeRounds) & ~1; // force even
-    Broadcast("[XMP] Overtime started. First %d rounds.\n", otRounds / 2);
-}
 
-void Plugin::EnterOvertimeSideSwap()
-{
-    Log("EnterOvertimeSideSwap: entering, scores T=%d CT=%d", terroristScore_, ctScore_);
-
-    // Save player scores before SwapTeams corrupts frags/deaths mid-round
+    // Save scores so they're preserved through the restart (just like halftime)
     for (int i = 1; i <= kMaxClients; ++i) {
         savedScoreInfo_[i] = players_[i].scoreInfoValues;
     }
+    halftimeScoresSaved_ = true;
 
-    SwapSideScores();
-    SyncDisplayedTeamScoresFromMatchScores(true);
-    SwapTeams();
+    // Apply live rules (mp_startmoney 800, freezetime, etc.) and restart so
+    // the money reset takes effect — same pattern as halftime → LO3
+    restarting_ = true;
+    SetState(MatchState::StartingLO3);
+    ApplyLiveStateRules();
+    ServerCommand("sv_restart 3\n");
 
-    const int remaining = (CvarInt(cvars_.overtimeRounds) & ~1) / 2;
-    Broadcast("[XMP] Overtime sides swapped. %d rounds remaining.\n", remaining);
+    const int otRounds = CvarInt(cvars_.overtimeRounds) & ~1;
+    Broadcast("[XMP] Overtime started. First %d rounds.\n", otRounds / 2);
 
-    // Restart to reset positions on the new sides.  Restore frags/deaths after
-    // the restart settles so the ScoreInfo replay has the correct values.
-    Schedule("ot_swap_restore", 3.0f, false, [this]() {
+    // Restore scores after the restart settles
+    Schedule("ot_restore", 4.0f, false, [this]() {
         for (int i = 1; i <= kMaxClients; ++i) {
             if (!savedScoreInfo_[i].empty()) {
                 players_[i].scoreInfoValues = savedScoreInfo_[i];
@@ -1656,6 +1651,58 @@ void Plugin::EnterOvertimeSideSwap()
         ReplayAllScoreInfo();
         savedScoreInfo_ = {};
         restarting_ = false;
+        halftimeScoresSaved_ = false;
+        SetState(MatchState::Overtime);
+    });
+}
+
+void Plugin::EnterOvertimeSideSwap()
+{
+    Log("EnterOvertimeSideSwap: entering, scores T=%d CT=%d", terroristScore_, ctScore_);
+
+    // Save player scores before SwapTeams corrupts frags/deaths mid-round
+    for (int i = 1; i <= kMaxClients; ++i) {
+        savedScoreInfo_[i] = players_[i].scoreInfoValues;
+    }
+    halftimeScoresSaved_ = true;
+
+    SwapSideScores();
+    SyncDisplayedTeamScoresFromMatchScores(true);
+    SwapTeams();
+
+    // Apply live rules (mp_startmoney 800) and restart so the new sides and
+    // money take effect. Set state to StartingLO3 to prevent OnRoundEnd from
+    // scoring any stray round-end events during the restart.
+    restarting_ = true;
+    SetState(MatchState::StartingLO3);
+    ApplyLiveStateRules();
+    ServerCommand("sv_restart 3\n");
+
+    const int remaining = (CvarInt(cvars_.overtimeRounds) & ~1) / 2;
+    Broadcast("[XMP] Overtime sides swapped. %d rounds remaining.\n", remaining);
+
+    Schedule("ot_swap_restore", 4.0f, false, [this]() {
+        for (int i = 1; i <= kMaxClients; ++i) {
+            if (!savedScoreInfo_[i].empty()) {
+                players_[i].scoreInfoValues = savedScoreInfo_[i];
+                if (savedScoreInfo_[i].size() >= 3) {
+                    edict_t *entity = INDEXENT(i);
+                    if (!FNullEnt(entity) && players_[i].connected) {
+                        entity->v.frags = static_cast<float>(savedScoreInfo_[i][1]);
+                        CBasePlayer *player = CBasePlayer::Instance(entity);
+                        if (player) {
+                            player->m_iDeaths = savedScoreInfo_[i][2];
+                        }
+                    }
+                }
+            }
+        }
+        SyncDisplayedTeamScoresFromMatchScores(true);
+        ReplayAllScoreInfo();
+        savedScoreInfo_ = {};
+        restarting_ = false;
+        halftimeScoresSaved_ = false;
+        SetState(MatchState::Overtime);
     });
 }
 
