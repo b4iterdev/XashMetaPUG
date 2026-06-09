@@ -949,6 +949,10 @@ void Plugin::SwapTeams()
     }
     Log("SwapTeams: %d -> CT, %d -> T, %d skipped (spec/unknown)", movedT, movedCT, skipped);
 
+    // Swap team names to match the new side assignments — the name follows the
+    // team (group of players), not the side label.
+    std::swap(teamAName_, teamBName_);
+
     Broadcast("[XMP] Players have been switched. Team scores are tracked by the engine.\n");
 }
 
