@@ -1609,11 +1609,54 @@ void Plugin::EnterHalftime()
 void Plugin::EnterOvertime()
 {
     overtimeRoundCount_ = 0;
+    overtimeSidesSwapped_ = false;
     overtimeTerroristStartScore_ = terroristScore_;
     overtimeCTStartScore_ = ctScore_;
     pendingLiveState_ = MatchState::Overtime;
     SetState(MatchState::Overtime);
-    Broadcast("[XMP] Overtime started.\n");
+    const int otRounds = CvarInt(cvars_.overtimeRounds) & ~1; // force even
+    Broadcast("[XMP] Overtime started. First %d rounds.\n", otRounds / 2);
+}
+
+void Plugin::EnterOvertimeSideSwap()
+{
+    Log("EnterOvertimeSideSwap: entering, scores T=%d CT=%d", terroristScore_, ctScore_);
+
+    // Save player scores before SwapTeams corrupts frags/deaths mid-round
+    for (int i = 1; i <= kMaxClients; ++i) {
+        savedScoreInfo_[i] = players_[i].scoreInfoValues;
+    }
+
+    SwapSideScores();
+    SyncDisplayedTeamScoresFromMatchScores(true);
+    SwapTeams();
+
+    const int remaining = (CvarInt(cvars_.overtimeRounds) & ~1) / 2;
+    Broadcast("[XMP] Overtime sides swapped. %d rounds remaining.\n", remaining);
+
+    // Restart to reset positions on the new sides.  Restore frags/deaths after
+    // the restart settles so the ScoreInfo replay has the correct values.
+    Schedule("ot_swap_restore", 3.0f, false, [this]() {
+        for (int i = 1; i <= kMaxClients; ++i) {
+            if (!savedScoreInfo_[i].empty()) {
+                players_[i].scoreInfoValues = savedScoreInfo_[i];
+                if (savedScoreInfo_[i].size() >= 3) {
+                    edict_t *entity = INDEXENT(i);
+                    if (!FNullEnt(entity) && players_[i].connected) {
+                        entity->v.frags = static_cast<float>(savedScoreInfo_[i][1]);
+                        CBasePlayer *player = CBasePlayer::Instance(entity);
+                        if (player) {
+                            player->m_iDeaths = savedScoreInfo_[i][2];
+                        }
+                    }
+                }
+            }
+        }
+        SyncDisplayedTeamScoresFromMatchScores(true);
+        ReplayAllScoreInfo();
+        savedScoreInfo_ = {};
+        restarting_ = false;
+    });
 }
 
 void Plugin::FinishMatch()
@@ -2043,7 +2086,7 @@ const char *Plugin::TeamName(Team team) const
 
 void Plugin::OnRoundEnd(int winStatus)
 {
-    if (state_ == MatchState::Disabled)
+    if (state_ == MatchState::Disabled || this->restarting_)
         return;
 
     Team winner = Team::Unknown;
@@ -2084,6 +2127,18 @@ void Plugin::OnRoundEnd(int winStatus)
     }
 
     this->restarting_ = false;
+
+    // Overtime round tracking: increment counter and check for midpoint side swap
+    if (state_ == MatchState::Overtime) {
+        ++overtimeRoundCount_;
+        const int otRounds = CvarInt(cvars_.overtimeRounds) & ~1; // force even
+        const int halfOt = otRounds / 2;
+        if (halfOt > 0 && overtimeRoundCount_ == halfOt && !overtimeSidesSwapped_) {
+            overtimeSidesSwapped_ = true;
+            EnterOvertimeSideSwap();
+            return; // swap handles its own messaging; skip score broadcast
+        }
+    }
 
     const char *tDisp = teamAName_.empty() ? "T" : teamAName_.c_str();
     const char *ctDisp = teamBName_.empty() ? "CT" : teamBName_.c_str();

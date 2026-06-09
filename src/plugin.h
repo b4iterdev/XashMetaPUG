@@ -179,6 +179,7 @@ private:
     void EvaluateMatchProgress();
     void EnterHalftime();
     void EnterOvertime();
+    void EnterOvertimeSideSwap();
     void FinishMatch();
     int GetRequiredReadyCount() const;
     bool ShouldRewriteTeamScoreMessage() const;
@@ -253,6 +254,7 @@ private:
     int halfRoundCount_ = 0;
     int totalRoundCount_ = 0;
     int overtimeRoundCount_ = 0;
+    bool overtimeSidesSwapped_ = false;
     int terroristScore_ = 0;
     int ctScore_ = 0;
     int displayedTerroristScore_ = 0;
