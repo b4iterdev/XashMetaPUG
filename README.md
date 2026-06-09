@@ -1,6 +1,8 @@
 # XashMetaPUG
 
-Metamod-only CS 1.6/Xash3D scrim plugin inspired by MatchBot, designed for ARM64-compatible builds without AMXX, ReAPI, ReGameDLL, or x86-only helper modules.
+Metamod-only CS 1.6/Xash3D scrim plugin inspired by MatchBot, designed for ARM64-compatible builds without AMXX, ReAPI, or x86-only helper modules.
+
+**Requires:** Metamod. **Optional:** ReGameDLL — if present on the server, the plugin uses it for reliable round-end events and equipment hooks. If absent, the plugin degrades gracefully to Metamod-only message inference.
 
 ## Current MVP Features
 
