@@ -725,6 +725,30 @@ void Plugin::FinishLO3()
             ReplayAllScoreInfo();
             Schedule("stop_restoring_scores", 5.0f, false, [this]() {
                 restoringScores_ = false;
+                // Re-apply frags/deaths in case sv_restart 1 (CBasePlayer::Spawn)
+                // reset them AFTER restore_scores ran. Detect the reset by checking
+                // current frags against the saved first-half baseline.
+                for (int i = 1; i <= kMaxClients; ++i) {
+                    if (savedScoreInfo_[i].size() < 3)
+                        continue;
+                    edict_t *entity = INDEXENT(i);
+                    if (!FNullEnt(entity) && players_[i].connected) {
+                        const int savedFrags = savedScoreInfo_[i][1];
+                        const int currentFrags = static_cast<int>(entity->v.frags);
+                        if (currentFrags < savedFrags) {
+                            // Reset occurred: add current (0-based) kills to saved baseline
+                            entity->v.frags = static_cast<float>(savedFrags + currentFrags);
+                            CBasePlayer *player = CBasePlayer::Instance(entity);
+                            if (player) {
+                                const int savedDeaths = savedScoreInfo_[i][2];
+                                const int currentDeaths = player->m_iDeaths;
+                                if (currentDeaths < savedDeaths) {
+                                    player->m_iDeaths = savedDeaths + currentDeaths;
+                                }
+                            }
+                        }
+                    }
+                }
                 for (int i = 1; i <= kMaxClients; ++i) {
                     savedScoreInfo_[i].clear();
                 }
@@ -1080,8 +1104,13 @@ void Plugin::HandleRoundScore(Team team, int score)
     }
 
     if (state_ != MatchState::FirstHalf && state_ != MatchState::SecondHalf && state_ != MatchState::Overtime) {
-        if (team == Team::Terrorist) lastObservedTScore_ = score;
-        if (team == Team::CounterTerrorist) lastObservedCTScore_ = score;
+        // When waiting for ready after halftime, the engine's TeamScore carries
+        // pre-swap scores from the first half's last round. Don't let them
+        // corrupt lastObserved* — FinishLO3 will re-sync from match scores.
+        if (!(state_ == MatchState::WaitingReady && pendingLiveState_ == MatchState::SecondHalf)) {
+            if (team == Team::Terrorist) lastObservedTScore_ = score;
+            if (team == Team::CounterTerrorist) lastObservedCTScore_ = score;
+        }
         return;
     }
 
@@ -1162,7 +1191,15 @@ void Plugin::HandleSideSelection(edict_t *entity, bool swapSides)
 
 bool Plugin::ShouldRewriteTeamScoreMessage() const
 {
-    return state_ == MatchState::HalfTime || state_ == MatchState::StartingLO3 || IsLiveState(state_);
+    if (state_ == MatchState::HalfTime || state_ == MatchState::StartingLO3 || IsLiveState(state_))
+        return true;
+    // Suppress late-arriving TeamScore from first half's last round that arrives
+    // AFTER EnterHalftime → SwapSideScores → StartReady has already transitioned
+    // to WaitingReady. The engine's TeamScore still carries pre-swap scores and
+    // would overwrite the correctly swapped displayed scores on the client.
+    if (state_ == MatchState::WaitingReady && pendingLiveState_ == MatchState::SecondHalf)
+        return true;
+    return false;
 }
 
 void Plugin::CacheScoreInfo()
