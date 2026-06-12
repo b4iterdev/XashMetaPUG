@@ -24,6 +24,8 @@ bool OnCBasePlayer_GetIntoGame(IReGameHook_CBasePlayer_GetIntoGame *chain, CBase
 void OnInternalCommand(IReGameHook_InternalCommand *chain, edict_t *pEntity, const char *pcmd, const char *parg1);
 void OnCSGameRules_PlayerKilled(IReGameHook_CSGameRules_PlayerKilled *chain, CBasePlayer *pVictim, entvars_t *pevKiller, entvars_t *pevInflictor);
 void OnCBasePlayer_AddAccount(IReGameHook_CBasePlayer_AddAccount *chain, CBasePlayer *player, int Amount, RewardType Type, bool TrackChange);
+void OnCBasePlayer_GiveShield(IReGameHook_CBasePlayer_GiveShield *chain, CBasePlayer *player, bool deploy);
+bool OnCBasePlayer_HasRestrictItem(IReGameHook_CBasePlayer_HasRestrictItem *chain, CBasePlayer *player, ItemID item, ItemRestType type);
 CGameRules *OnInstallGameRules(IReGameHook_InstallGameRules *chain);
 
 } // namespace xmp

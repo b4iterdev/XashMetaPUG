@@ -137,6 +137,8 @@ public:
     void OnPlayerAddAccount(CBasePlayer *player, int Amount, RewardType Type, bool TrackChange);
     void OnCSPlayerKilled(CBasePlayer *pVictim, entvars_s *pevKiller, entvars_s *pevInflictor);
     bool OnInternalCommand(edict_t *pEntity, const char *pcmd, const char *parg1);
+    bool OnPlayerGiveShield(CBasePlayer *player, bool deploy);
+    bool OnPlayerHasRestrictItem(CBasePlayer *player, ItemID item, ItemRestType type);
 
 private:
     void RegisterCvars();
@@ -206,6 +208,8 @@ private:
     bool GiveItemNative(edict_t *entity, const char *classname) const;
     bool SetPlayerMoneyNative(edict_t *entity, int money, bool flash);
     bool RemovePlayerC4Native(edict_t *entity) const;
+    bool RemovePlayerShieldNative(edict_t *entity) const;
+    void EnforceTacticalShieldRestriction();
     void EnforcePracticePlayer(edict_t *entity);
     void EnforcePracticeStatePlayers();
     void ResetLivePlayerLoadout(int money);
@@ -220,6 +224,7 @@ private:
     bool IsLiveState(MatchState state) const;
     bool IsPracticeState(MatchState state) const;
     bool IsSideSwitchBlocked(MatchState state) const;
+    bool IsTacticalShieldCommand(edict_t *entity, const char *command, const char *arg) const;
     bool IsConnectedPlayerIndex(int index) const;
     int PlayerIndex(edict_t *entity) const;
     int ConnectedPlayers() const;

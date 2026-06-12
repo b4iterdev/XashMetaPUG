@@ -9,6 +9,7 @@
 #endif
 
 #include <cbase.h>
+#include <cdll_dll.h>
 #include <player.h>
 #include <regamedll_const.h>
 
@@ -163,6 +164,8 @@ void Plugin::OnStartFrame()
         GetGameRules()->m_iRoundTimeSecs = pauseDuration_ + 1;
         GetGameRules()->m_iIntroRoundTime = pauseDuration_ + 1;
     }
+
+    EnforceTacticalShieldRestriction();
 }
 
 bool Plugin::OnClientConnect(edict_t *entity, const char *name)
@@ -216,6 +219,11 @@ bool Plugin::OnClientCommand(edict_t *entity)
 
     if (strcasecmp(cmd, "jointeam") == 0 && IsSideSwitchBlocked(state_)) {
         Say(entity, "[XMP] Side switching is disabled while LIVE.\n");
+        return true;
+    }
+
+    if (IsTacticalShieldCommand(entity, cmd, g_engfuncs.pfnCmd_Argv(1))) {
+        Say(entity, "[XMP] Tactical Shield is disabled on this server.\n");
         return true;
     }
 
@@ -1457,6 +1465,41 @@ bool Plugin::RemovePlayerC4Native(edict_t *entity) const
     return removed;
 }
 
+bool Plugin::RemovePlayerShieldNative(edict_t *entity) const
+{
+    if (!entity || FNullEnt(entity)) {
+        return false;
+    }
+
+    CBasePlayer *player = CBasePlayer::Instance(entity);
+    if (!player) {
+        return false;
+    }
+
+    const bool hadShield = player->m_bOwnsShield || player->m_bShieldDrawn;
+    player->m_bOwnsShield = false;
+    player->m_bShieldDrawn = false;
+    if (!player->m_rgpPlayerItems[PRIMARY_WEAPON_SLOT]) {
+        player->m_bHasPrimary = false;
+    }
+    if (player->pev) {
+        player->pev->iuser3 &= ~PLAYER_HOLDING_SHIELD;
+    }
+    return hadShield;
+}
+
+void Plugin::EnforceTacticalShieldRestriction()
+{
+    for (int i = 1; i <= kMaxClients; ++i) {
+        if (!players_[i].connected) {
+            continue;
+        }
+
+        edict_t *entity = g_engfuncs.pfnPEntityOfEntIndex(i);
+        RemovePlayerShieldNative(entity);
+    }
+}
+
 void Plugin::EnforcePracticePlayer(edict_t *entity)
 {
     if (!entity || FNullEnt(entity)) {
@@ -1992,6 +2035,26 @@ bool Plugin::IsSideSwitchBlocked(MatchState state) const
     return IsLiveState(state) || state == MatchState::KnifeRound || state == MatchState::SideSelection;
 }
 
+bool Plugin::IsTacticalShieldCommand(edict_t *entity, const char *command, const char *arg) const
+{
+    if (!command || !*command) {
+        return false;
+    }
+
+    if (strcasecmp(command, "shield") == 0 || strcasecmp(command, "shieldgun") == 0) {
+        return true;
+    }
+
+    if (strcasecmp(command, "menuselect") == 0 && arg && std::atoi(arg) == MENU_SLOT_ITEM_SHIELD) {
+        CBasePlayer *player = CBasePlayer::Instance(entity);
+        return player && player->m_iMenu == Menu_BuyItem;
+    }
+
+    return strcasecmp(command, "buy") == 0 && arg &&
+        (strcasecmp(arg, "shield") == 0 || strcasecmp(arg, "shieldgun") == 0 ||
+         strcasecmp(arg, "weapon_shield") == 0);
+}
+
 bool Plugin::IsConnectedPlayerIndex(int index) const
 {
     return index > 0 && index <= kMaxClients && players_[index].connected;
@@ -2404,6 +2467,10 @@ bool Plugin::OnInternalCommand(edict_t *pEntity, const char *pcmd, const char *p
     if (!pEntity || !pcmd)
         return false;
 
+    if (IsTacticalShieldCommand(pEntity, pcmd, parg1)) {
+        return true;
+    }
+
     if ((strcmp(pcmd, "jointeam") == 0 || strcmp(pcmd, "changeteam") == 0)
         && IsSideSwitchBlocked(state_))
     {
@@ -2411,6 +2478,24 @@ bool Plugin::OnInternalCommand(edict_t *pEntity, const char *pcmd, const char *p
     }
 
     return false;
+}
+
+bool Plugin::OnPlayerGiveShield(CBasePlayer *player, bool deploy)
+{
+    (void)deploy;
+    if (!player) {
+        return false;
+    }
+
+    RemovePlayerShieldNative(player->edict());
+    return true;
+}
+
+bool Plugin::OnPlayerHasRestrictItem(CBasePlayer *player, ItemID item, ItemRestType type)
+{
+    (void)player;
+    (void)type;
+    return item == ITEM_SHIELDGUN;
 }
 
 } // namespace xmp

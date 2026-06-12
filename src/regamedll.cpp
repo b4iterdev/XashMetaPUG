@@ -122,6 +122,8 @@ bool ReGameDLL_Init()
     g_ReGameHookchains->CBasePlayer_SwitchTeam()->registerHook(OnCBasePlayer_SwitchTeam);
     g_ReGameHookchains->CBasePlayer_GetIntoGame()->registerHook(OnCBasePlayer_GetIntoGame);
     g_ReGameHookchains->CBasePlayer_AddAccount()->registerHook(OnCBasePlayer_AddAccount);
+    g_ReGameHookchains->CBasePlayer_GiveShield()->registerHook(OnCBasePlayer_GiveShield);
+    g_ReGameHookchains->CBasePlayer_HasRestrictItem()->registerHook(OnCBasePlayer_HasRestrictItem);
     g_ReGameHookchains->InstallGameRules()->registerHook(OnInstallGameRules);
     g_ReGameHookchains->CSGameRules_PlayerKilled()->registerHook(OnCSGameRules_PlayerKilled);
     g_ReGameHookchains->InternalCommand()->registerHook(OnInternalCommand);
@@ -146,6 +148,8 @@ bool ReGameDLL_Stop()
     g_ReGameHookchains->CBasePlayer_SwitchTeam()->unregisterHook(OnCBasePlayer_SwitchTeam);
     g_ReGameHookchains->CBasePlayer_GetIntoGame()->unregisterHook(OnCBasePlayer_GetIntoGame);
     g_ReGameHookchains->CBasePlayer_AddAccount()->unregisterHook(OnCBasePlayer_AddAccount);
+    g_ReGameHookchains->CBasePlayer_GiveShield()->unregisterHook(OnCBasePlayer_GiveShield);
+    g_ReGameHookchains->CBasePlayer_HasRestrictItem()->unregisterHook(OnCBasePlayer_HasRestrictItem);
     g_ReGameHookchains->InstallGameRules()->unregisterHook(OnInstallGameRules);
     g_ReGameHookchains->CSGameRules_PlayerKilled()->unregisterHook(OnCSGameRules_PlayerKilled);
     g_ReGameHookchains->InternalCommand()->unregisterHook(OnInternalCommand);
@@ -234,6 +238,24 @@ void OnCBasePlayer_AddAccount(IReGameHook_CBasePlayer_AddAccount *chain,
 {
     GetPlugin().OnPlayerAddAccount(player, Amount, Type, TrackChange);
     chain->callNext(player, Amount, Type, TrackChange);
+}
+
+void OnCBasePlayer_GiveShield(IReGameHook_CBasePlayer_GiveShield *chain,
+    CBasePlayer *player, bool deploy)
+{
+    if (GetPlugin().OnPlayerGiveShield(player, deploy)) {
+        return;
+    }
+    chain->callNext(player, deploy);
+}
+
+bool OnCBasePlayer_HasRestrictItem(IReGameHook_CBasePlayer_HasRestrictItem *chain,
+    CBasePlayer *player, ItemID item, ItemRestType type)
+{
+    if (GetPlugin().OnPlayerHasRestrictItem(player, item, type)) {
+        return true;
+    }
+    return chain->callNext(player, item, type);
 }
 
 CGameRules *OnInstallGameRules(IReGameHook_InstallGameRules *chain)
