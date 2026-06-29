@@ -1,0 +1,19 @@
+// XashMetaPUG restricted weapons list.
+// One weapon per line. Lines starting with // are comments.
+// Weapon names are matched case-insensitively, with or without the
+// "weapon_" prefix. Common aliases are also accepted (e.g. "mp5", "vest").
+//
+// Restricted weapons are blocked at three layers:
+//   1. Client buy commands ("buy <name>", menuselect, bare aliases)
+//   2. ReGameDLL HasRestrictItem hook (buy / pickup / equip)
+//   3. Runtime shield-strip every frame (shield only - special player data)
+//
+// Shield is special-cased because it uses dedicated player pdata fields
+// (m_bOwnsShield, m_bShieldDrawn) that require explicit per-frame clearing.
+// All other weapons are blocked purely through layers 1 and 2.
+//
+// To allow a weapon, comment out or delete its line.
+// An empty file defaults to shield-only restriction.
+
+// Equipment
+shield
