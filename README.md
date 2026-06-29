@@ -87,7 +87,7 @@ linux addons/xashmetapug/dlls/xashmetapug_mm_arm64.so
 | `!unpause` | Unpause the match. |
 | `!swap` | Swap teams (disabled while live). |
 | `!score` | Display current score. |
-| `!reload` | Reload the admin list from `users.txt`. |
+| `!reload` | Reload the admin list and restricted weapons list. |
 
 ## Server Console Commands
 
@@ -139,6 +139,45 @@ Paths containing `..`, spaces, quotes, semicolons, newlines, or paths outside th
 - Menu/vote systems are deferred; chat commands are the MVP interface.
 - Team scores shown on the client scoreboard are managed through intercepted/resend `TeamScore` user messages. The plugin keeps its own displayed T/CT score layer and resends those values after halftime, LO3, and score updates.
 
+## Weapon Restriction
+
+The plugin ships a configurable weapon restriction framework. By default the Tactical Shield is restricted (matching the previous hardcoded behavior), but admins can restrict any CS 1.6 weapon by editing the list file.
+
+### Configuration
+
+The restricted list is loaded from:
+
+```txt
+addons/xashmetapug/restricted_weapons.txt
+```
+
+Each non-comment line is a weapon name (with or without the `weapon_` prefix). Blank lines and `// comments` are ignored. Example:
+
+```txt
+// Restrict tactical shield (default)
+shield
+// Uncomment to also restrict the AWP
+// awp
+```
+
+Recognized weapon names include: `shield`, `p228`, `glock`/`glock18`, `scout`, `hegrenade`, `xm1014`, `mac10`, `aug`, `smokegrenade`, `elite`, `fiveseven`, `ump45`, `sg550`, `galil`, `famas`, `usp`, `awp`, `mp5navy`/`mp5`, `m249`, `m3`, `m4a1`, `tmp`, `g3sg1`, `flashbang`, `deagle`, `sg552`, `ak47`, `knife`, `p90`, `nvg`/`nightvision`, `defuser`/`defusekit`, `kevlar`/`vest`, `assault`/`assaultsuit`/`vesthelm`, `c4`.
+
+### Enforcement layers
+
+The framework blocks restricted items via three complementary paths:
+
+1. **Client-command interception** — `buy <name>`, shield aliases (`shield`/`shieldgun`), and the buy-menu shield slot are blocked at `OnClientCommand` / `OnInternalCommand`.
+2. **ReGameDLL typed hooks** (when present) — `CBasePlayer_HasRestrictItem` rejects restricted items; `CBasePlayer_GiveShield` is blocked when shield is restricted.
+3. **Continuous runtime strip** (Metamod-only fallback) — shield is stripped every frame via `EnforceShieldRestriction()` when ReGameDLL is absent.
+
+Reload the list at runtime with `xmp_reload` (also reloads the admin list).
+
+### Cvar
+
+| Cvar | Default | Description |
+|---|---|---|
+| `xmp_restricted_weapons_file` | `addons/xashmetapug/restricted_weapons.txt` | Path to the restricted weapons list. |
+
 ## Cvars
 
 | Cvar | Default | Description |
@@ -166,3 +205,23 @@ Paths containing `..`, spaces, quotes, semicolons, newlines, or paths outside th
 | `xmp_cfg_overtime` | `addons/xashmetapug/cfg/overtime.cfg` | Config exec'd on entering Overtime. |
 | `xmp_cfg_end` | `addons/xashmetapug/cfg/end.cfg` | Config exec'd on entering Finished. |
 | `xmp_debug_messages` | `0` | Log every captured user message (verbose). |
+| `xmp_restricted_weapons_file` | `addons/xashmetapug/restricted_weapons.txt` | Path to the restricted-weapons list (one weapon name per line). |
+
+## Weapon Restriction
+
+The plugin reads a list of restricted weapons from the file pointed to by `xmp_restricted_weapons_file` (default: `addons/xashmetapug/restricted_weapons.txt`). Each line is a weapon name (with or without the `weapon_` prefix). Lines starting with `//` are comments.
+
+```txt
+// Default: only the Tactical Shield is restricted.
+shield
+// Uncomment to also restrict the AWP:
+// awp
+```
+
+Restriction is enforced through three layers:
+
+1. **Buy-menu / command interception** — `buy <weapon>`, `<weapon>`, and the shield VGUI slot are blocked with the message `[XMP] That weapon is restricted on this server.`
+2. **ReGameDLL `HasRestrictItem` hook** (when ReGameDLL is present) — blocks buying, touching, and spawn-equipping of listed items.
+3. **Runtime strip** (shield only) — every frame, the plugin clears the shield private-data flags on all players, since the shield is not a normal inventory item.
+
+Reload the list at runtime with `xmp_reload` (server console).

@@ -184,27 +184,49 @@ class KnifeRoundStaticTests(unittest.TestCase):
         self.assertIn("state_ == MatchState::KnifeRound", PLUGIN_CPP)
 
     def test_tactical_shield_is_blocked_from_buy_and_pickup_paths(self):
-        self.assertIn("bool IsTacticalShieldCommand(edict_t *entity, const char *command, const char *arg) const", PLUGIN_H)
+        self.assertIn("bool IsRestrictedWeaponCommand(edict_t *entity, const char *command, const char *arg) const", PLUGIN_H)
         self.assertIn('strcasecmp(command, "shield") == 0', PLUGIN_CPP)
         self.assertIn('strcasecmp(command, "buy") == 0', PLUGIN_CPP)
-        self.assertIn('strcasecmp(arg, "shield") == 0', PLUGIN_CPP)
-        self.assertIn('strcasecmp(arg, "weapon_shield") == 0', PLUGIN_CPP)
         self.assertIn('strcasecmp(command, "menuselect") == 0', PLUGIN_CPP)
         self.assertIn("MENU_SLOT_ITEM_SHIELD", PLUGIN_CPP)
         self.assertIn("player->m_iMenu == Menu_BuyItem", PLUGIN_CPP)
-        self.assertIn("Tactical Shield is disabled on this server", PLUGIN_CPP)
+        self.assertIn("weapon is restricted on this server", PLUGIN_CPP)
         self.assertIn("bool RemovePlayerShieldNative(edict_t *entity) const", PLUGIN_H)
         self.assertIn("player->m_bOwnsShield = false", PLUGIN_CPP)
         self.assertIn("player->m_bShieldDrawn = false", PLUGIN_CPP)
         self.assertIn("player->m_bHasPrimary = false", PLUGIN_CPP)
         self.assertIn("PLAYER_HOLDING_SHIELD", PLUGIN_CPP)
-        self.assertIn("EnforceTacticalShieldRestriction()", PLUGIN_CPP)
+        self.assertIn("EnforceShieldRestriction()", PLUGIN_CPP)
         regamedll_cpp = (ROOT / "src" / "regamedll.cpp").read_text()
         self.assertIn("CBasePlayer_GiveShield()->registerHook(OnCBasePlayer_GiveShield)", regamedll_cpp)
         self.assertIn("CBasePlayer_HasRestrictItem()->registerHook(OnCBasePlayer_HasRestrictItem)", regamedll_cpp)
         self.assertIn("OnPlayerGiveShield(player, deploy)", regamedll_cpp)
         self.assertIn("OnPlayerHasRestrictItem(player, item, type)", regamedll_cpp)
-        self.assertIn("return item == ITEM_SHIELDGUN", PLUGIN_CPP)
+        self.assertIn("IsRestrictedItem(ITEM_SHIELDGUN)", PLUGIN_CPP)
+
+    def test_weapon_restriction_framework_uses_configurable_file(self):
+        self.assertIn("restrictedWeaponsFile{}", PLUGIN_H)
+        self.assertIn("std::set<ItemID> restrictedItems_{}", PLUGIN_H)
+        self.assertIn("void LoadRestrictedWeapons()", PLUGIN_H)
+        self.assertIn("ItemID ParseWeaponNameToItemID(const std::string &name) const", PLUGIN_H)
+        self.assertIn("bool IsRestrictedItem(ItemID item) const", PLUGIN_H)
+        self.assertIn("RegisterCvar(cvars_.restrictedWeaponsFile", PLUGIN_CPP)
+        self.assertIn('"xmp_restricted_weapons_file"', PLUGIN_CPP)
+        self.assertIn('"addons/xashmetapug/restricted_weapons.txt"', PLUGIN_CPP)
+        self.assertIn("LoadRestrictedWeapons()", PLUGIN_CPP)
+        self.assertIn("struct WeaponNameEntry", PLUGIN_CPP)
+        self.assertIn("ITEM_SHIELDGUN", PLUGIN_CPP)
+        self.assertIn("ITEM_AWP", PLUGIN_CPP)
+        self.assertIn("ITEM_AK47", PLUGIN_CPP)
+
+    def test_weapon_restriction_framework_generic_buy_check(self):
+        self.assertIn("ParseWeaponNameToItemID(weaponName)", PLUGIN_CPP)
+        self.assertIn("IsRestrictedItem(item)", PLUGIN_CPP)
+        self.assertIn("IsRestrictedItem(ITEM_SHIELDGUN)", PLUGIN_CPP)
+
+    def test_restricted_weapons_default_config_file_exists(self):
+        restricted_cfg = (ROOT / "cstrike" / "addons" / "xashmetapug" / "restricted_weapons.txt").read_text()
+        self.assertIn("shield", restricted_cfg)
 
     def test_knife_round_strips_pistol_once_and_re_arms_knife_after_restart(self):
         self.assertIn("StripKnifeRoundWeapons()", PLUGIN_CPP)
