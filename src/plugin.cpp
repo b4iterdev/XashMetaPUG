@@ -33,11 +33,141 @@ static CHalfLifeMultiplay *GetGameRules()
     return nullptr;
 }
 
+// Weapon name -> ItemID mapping for restricted-weapons file parsing.
+// Keys are lowercased weapon classnames without the "weapon_" prefix.
+struct WeaponNameEntry {
+    const char *name;
+    ItemID item;
+};
+
+static const WeaponNameEntry kWeaponNames[] = {
+    {"shield",     ITEM_SHIELDGUN},
+    {"shieldgun",  ITEM_SHIELDGUN},
+    {"weapon_shield", ITEM_SHIELDGUN},
+    {"p228",       ITEM_P228},
+    {"glock",      ITEM_GLOCK},
+    {"scout",      ITEM_SCOUT},
+    {"hegrenade",  ITEM_HEGRENADE},
+    {"xm1014",     ITEM_XM1014},
+    {"mac10",      ITEM_MAC10},
+    {"aug",        ITEM_AUG},
+    {"smokegrenade", ITEM_SMOKEGRENADE},
+    {"elite",      ITEM_ELITE},
+    {"fiveseven",  ITEM_FIVESEVEN},
+    {"ump45",      ITEM_UMP45},
+    {"sg550",      ITEM_SG550},
+    {"galil",      ITEM_GALIL},
+    {"famas",      ITEM_FAMAS},
+    {"usp",        ITEM_USP},
+    {"glock18",    ITEM_GLOCK18},
+    {"awp",        ITEM_AWP},
+    {"mp5navy",    ITEM_MP5N},
+    {"mp5",        ITEM_MP5N},
+    {"m249",       ITEM_M249},
+    {"m3",         ITEM_M3},
+    {"m4a1",       ITEM_M4A1},
+    {"tmp",        ITEM_TMP},
+    {"g3sg1",      ITEM_G3SG1},
+    {"flashbang",  ITEM_FLASHBANG},
+    {"deagle",     ITEM_DEAGLE},
+    {"sg552",      ITEM_SG552},
+    {"ak47",       ITEM_AK47},
+    {"knife",      ITEM_KNIFE},
+    {"p90",        ITEM_P90},
+    {"nvg",        ITEM_NVG},
+    {"nightvision", ITEM_NVG},
+    {"defuser",    ITEM_DEFUSEKIT},
+    {"defusekit",  ITEM_DEFUSEKIT},
+    {"kevlar",     ITEM_KEVLAR},
+    {"assault",    ITEM_ASSAULT},
+    {"assaultsuit", ITEM_ASSAULT},
+    {"vest",       ITEM_KEVLAR},
+    {"vesthelm",   ITEM_ASSAULT},
+    {"c4",         ITEM_C4},
+};
+
+static std::string ToLowerCopy(const std::string &s)
+{
+    std::string out = s;
+    std::transform(out.begin(), out.end(), out.begin(), ::tolower);
+    return out;
+}
+
+ItemID Plugin::ParseWeaponNameToItemID(const std::string &name) const
+{
+    std::string trimmed = name;
+    // Strip optional "weapon_" prefix.
+    const std::string prefix = "weapon_";
+    if (trimmed.size() > prefix.size() &&
+        strncasecmp(trimmed.c_str(), prefix.c_str(), prefix.size()) == 0) {
+        trimmed = trimmed.substr(prefix.size());
+    }
+    trimmed = ToLowerCopy(trimmed);
+    for (const auto &entry : kWeaponNames) {
+        if (trimmed == entry.name) {
+            return entry.item;
+        }
+    }
+    return ITEM_NONE;
+}
+
+bool Plugin::IsRestrictedItem(ItemID item) const
+{
+    return restrictedItems_.find(item) != restrictedItems_.end();
+}
+
+void Plugin::LoadRestrictedWeapons()
+{
+    restrictedItems_.clear();
+    std::string path = "addons/xashmetapug/restricted_weapons.txt";
+    if (!CvarString(cvars_.restrictedWeaponsFile).empty()) {
+        path = CvarString(cvars_.restrictedWeaponsFile);
+    }
+
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        // Try cstrike/-prefixed fallback (local repo / smoke test layout).
+        file.open("cstrike/" + path);
+    }
+    if (!file.is_open()) {
+        Log("LoadRestrictedWeapons: %s not found; defaulting to shield-only restriction", path.c_str());
+        restrictedItems_.insert(ITEM_SHIELDGUN);
+        return;
+    }
+
+    std::string line;
+    int count = 0;
+    while (std::getline(file, line)) {
+        const auto comment = line.find("//");
+        if (comment != std::string::npos) {
+            line = line.substr(0, comment);
+        }
+        std::istringstream stream(line);
+        std::string name;
+        if (stream >> name && !name.empty()) {
+            const ItemID item = ParseWeaponNameToItemID(name);
+            if (item != ITEM_NONE) {
+                restrictedItems_.insert(item);
+                ++count;
+            } else {
+                Log("LoadRestrictedWeapons: unknown weapon '%s' ignored", name.c_str());
+            }
+        }
+    }
+    // Always include shield by default if the file is empty / did not list it.
+    if (restrictedItems_.find(ITEM_SHIELDGUN) == restrictedItems_.end() && count == 0) {
+        restrictedItems_.insert(ITEM_SHIELDGUN);
+    }
+    Log("LoadRestrictedWeapons: loaded %d restricted item(s) from %s",
+        static_cast<int>(restrictedItems_.size()), path.c_str());
+}
+
 void Plugin::OnMetaAttach()
 {
     std::srand(static_cast<unsigned>(std::time(nullptr)));
     RegisterCvars();
     LoadAdmins();
+    LoadRestrictedWeapons();
     g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_forcestart"), []() {
         GetPlugin().ForceStartFromServer();
     });
@@ -83,7 +213,8 @@ void Plugin::OnMetaAttach()
     g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_reload"), []() {
         GetPlugin().Log("xmp_reload executed from server console");
         GetPlugin().LoadAdmins();
-        g_engfuncs.pfnServerPrint("Admin list reloaded.\n");
+        GetPlugin().LoadRestrictedWeapons();
+        g_engfuncs.pfnServerPrint("Admin list and restricted weapons reloaded.\n");
     });
     g_engfuncs.pfnAddServerCommand(const_cast<char *>("xmp_timeout"), []() {
         GetPlugin().Log("xmp_timeout executed from server console");
@@ -116,6 +247,7 @@ void Plugin::OnServerActivate()
         Log("OnServerActivate: RoundTime message not found\n");
     }
     LoadAdmins();
+    LoadRestrictedWeapons();
     ResetMatch(true);
     SetState(CvarInt(cvars_.enabled) ? MatchState::Warmup : MatchState::Disabled);
 }
@@ -165,7 +297,7 @@ void Plugin::OnStartFrame()
         GetGameRules()->m_iIntroRoundTime = pauseDuration_ + 1;
     }
 
-    EnforceTacticalShieldRestriction();
+    EnforceShieldRestriction();
 }
 
 bool Plugin::OnClientConnect(edict_t *entity, const char *name)
@@ -222,8 +354,8 @@ bool Plugin::OnClientCommand(edict_t *entity)
         return true;
     }
 
-    if (IsTacticalShieldCommand(entity, cmd, g_engfuncs.pfnCmd_Argv(1))) {
-        Say(entity, "[XMP] Tactical Shield is disabled on this server.\n");
+    if (IsRestrictedWeaponCommand(entity, cmd, g_engfuncs.pfnCmd_Argv(1))) {
+        Say(entity, "[XMP] That weapon is restricted on this server.\n");
         return true;
     }
 
@@ -381,6 +513,8 @@ void Plugin::RegisterCvars()
     RegisterCvar(cvars_.cfgOvertime, "xmp_cfg_overtime", "addons/xashmetapug/cfg/overtime.cfg");
     RegisterCvar(cvars_.cfgEnd, "xmp_cfg_end", "addons/xashmetapug/cfg/end.cfg");
     RegisterCvar(cvars_.debugMessages, "xmp_debug_messages", "0");
+    RegisterCvar(cvars_.restrictedWeaponsFile, "xmp_restricted_weapons_file",
+                 "addons/xashmetapug/restricted_weapons.txt");
 }
 
 void Plugin::RegisterCvar(cvar_t &cvar, const char *name, const char *value, int flags)
@@ -1488,8 +1622,12 @@ bool Plugin::RemovePlayerShieldNative(edict_t *entity) const
     return hadShield;
 }
 
-void Plugin::EnforceTacticalShieldRestriction()
+void Plugin::EnforceShieldRestriction()
 {
+    if (!IsRestrictedItem(ITEM_SHIELDGUN)) {
+        return;
+    }
+
     for (int i = 1; i <= kMaxClients; ++i) {
         if (!players_[i].connected) {
             continue;
@@ -2035,24 +2173,41 @@ bool Plugin::IsSideSwitchBlocked(MatchState state) const
     return IsLiveState(state) || state == MatchState::KnifeRound || state == MatchState::SideSelection;
 }
 
-bool Plugin::IsTacticalShieldCommand(edict_t *entity, const char *command, const char *arg) const
+bool Plugin::IsRestrictedWeaponCommand(edict_t *entity, const char *command, const char *arg) const
 {
     if (!command || !*command) {
         return false;
     }
 
-    if (strcasecmp(command, "shield") == 0 || strcasecmp(command, "shieldgun") == 0) {
-        return true;
+    // Shield is special: it has bare aliases ("shield", "shieldgun") that act
+    // as direct buy commands, plus a buy-menu slot handled below.
+    if (IsRestrictedItem(ITEM_SHIELDGUN)) {
+        if (strcasecmp(command, "shield") == 0 || strcasecmp(command, "shieldgun") == 0) {
+            return true;
+        }
+        if (strcasecmp(command, "menuselect") == 0 && arg && std::atoi(arg) == MENU_SLOT_ITEM_SHIELD) {
+            CBasePlayer *player = CBasePlayer::Instance(entity);
+            return player && player->m_iMenu == Menu_BuyItem;
+        }
     }
 
-    if (strcasecmp(command, "menuselect") == 0 && arg && std::atoi(arg) == MENU_SLOT_ITEM_SHIELD) {
-        CBasePlayer *player = CBasePlayer::Instance(entity);
-        return player && player->m_iMenu == Menu_BuyItem;
+    // Generic buy-command restriction: "buy <weapon>" or "<weapon>" alias.
+    if (!arg || !*arg) {
+        return false;
     }
 
-    return strcasecmp(command, "buy") == 0 && arg &&
-        (strcasecmp(arg, "shield") == 0 || strcasecmp(arg, "shieldgun") == 0 ||
-         strcasecmp(arg, "weapon_shield") == 0);
+    const char *weaponName = arg;
+    bool isBuyCommand = strcasecmp(command, "buy") == 0;
+    // Some weapons accept their classname directly as a client command (e.g.
+    // "shield", "awp" on certain installs). Check that path only when the
+    // command itself parses to a restricted weapon and is NOT a known meta
+    // command (jointeam/menuselect/say/etc.).
+    if (isBuyCommand) {
+        const ItemID item = ParseWeaponNameToItemID(weaponName);
+        return item != ITEM_NONE && IsRestrictedItem(item);
+    }
+
+    return false;
 }
 
 bool Plugin::IsConnectedPlayerIndex(int index) const
@@ -2467,7 +2622,7 @@ bool Plugin::OnInternalCommand(edict_t *pEntity, const char *pcmd, const char *p
     if (!pEntity || !pcmd)
         return false;
 
-    if (IsTacticalShieldCommand(pEntity, pcmd, parg1)) {
+    if (IsRestrictedWeaponCommand(pEntity, pcmd, parg1)) {
         return true;
     }
 
@@ -2487,6 +2642,10 @@ bool Plugin::OnPlayerGiveShield(CBasePlayer *player, bool deploy)
         return false;
     }
 
+    if (!IsRestrictedItem(ITEM_SHIELDGUN)) {
+        return false;
+    }
+
     RemovePlayerShieldNative(player->edict());
     return true;
 }
@@ -2495,7 +2654,7 @@ bool Plugin::OnPlayerHasRestrictItem(CBasePlayer *player, ItemID item, ItemRestT
 {
     (void)player;
     (void)type;
-    return item == ITEM_SHIELDGUN;
+    return IsRestrictedItem(item);
 }
 
 } // namespace xmp

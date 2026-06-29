@@ -100,6 +100,7 @@ struct Cvars {
     cvar_t cfgOvertime{};
     cvar_t cfgEnd{};
     cvar_t debugMessages{};
+    cvar_t restrictedWeaponsFile{};
 };
 
 class Plugin {
@@ -144,6 +145,9 @@ private:
     void RegisterCvars();
     void RegisterCvar(cvar_t &cvar, const char *name, const char *value, int flags = FCVAR_EXTDLL);
     void LoadAdmins();
+    void LoadRestrictedWeapons();
+    ItemID ParseWeaponNameToItemID(const std::string &name) const;
+    bool IsRestrictedItem(ItemID item) const;
     void ResetMatch(bool keepWarmup);
     void SetState(MatchState next);
     void ExecuteStateConfig(MatchState state);
@@ -209,7 +213,7 @@ private:
     bool SetPlayerMoneyNative(edict_t *entity, int money, bool flash);
     bool RemovePlayerC4Native(edict_t *entity) const;
     bool RemovePlayerShieldNative(edict_t *entity) const;
-    void EnforceTacticalShieldRestriction();
+    void EnforceShieldRestriction();
     void EnforcePracticePlayer(edict_t *entity);
     void EnforcePracticeStatePlayers();
     void ResetLivePlayerLoadout(int money);
@@ -224,7 +228,7 @@ private:
     bool IsLiveState(MatchState state) const;
     bool IsPracticeState(MatchState state) const;
     bool IsSideSwitchBlocked(MatchState state) const;
-    bool IsTacticalShieldCommand(edict_t *entity, const char *command, const char *arg) const;
+    bool IsRestrictedWeaponCommand(edict_t *entity, const char *command, const char *arg) const;
     bool IsConnectedPlayerIndex(int index) const;
     int PlayerIndex(edict_t *entity) const;
     int ConnectedPlayers() const;
@@ -254,6 +258,7 @@ private:
     std::array<PlayerInfo, kMaxClients + 1> players_{};
     std::array<std::vector<int>, kMaxClients + 1> savedScoreInfo_{};
     std::set<std::string> admins_{};
+    std::set<ItemID> restrictedItems_{};
     std::vector<ScheduledTask> tasks_{};
     int lo3Step_ = 0;
     int halfRoundCount_ = 0;
